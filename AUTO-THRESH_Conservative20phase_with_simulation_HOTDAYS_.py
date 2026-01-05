@@ -191,11 +191,17 @@ n_starts       = st.sidebar.slider("MLE multi-starts", 10, 60, 30, step=5)
 
 # Alert thresholds (sensitive defaults to help curves move)
 st.sidebar.header("Alert thresholds")
-theta_mu1_days = st.sidebar.number_input("Phase shift threshold mu1 (days)", value=10.0, min_value=0.0)
-theta_mu2_days = st.sidebar.number_input("Phase shift threshold mu2 (days)", value=7.0, min_value=0.0)
-theta_eta      = st.sidebar.number_input("Skew change threshold (eta)", value=0.05, min_value=0.0)
-theta_nu_days  = st.sidebar.number_input("Skew orientation threshold nu (days)", value=10.0, min_value=0.0)
+theta_mu1_days = st.sidebar.number_input("Phase shift threshold mu1 (days)", key="theta_mu1_days",
+    value=st.session_state.get("theta_mu1_days", 10.0), min_value=0.0)
+
+theta_mu2_days = st.sidebar.number_input("Phase shift threshold mu2 (days)",key="theta_mu2_days", value=st.session_state.get("theta_mu2_days", 7.0),
+    min_value=0.0)
+theta_eta = st.sidebar.number_input("Skew change threshold (eta)", key="theta_eta",value=st.session_state.get("theta_eta", 0.05),
+    min_value=0.0)
+theta_nu_days = st.sidebar.number_input("Skew orientation threshold nu (days)",key="theta_nu_days",
+    value=st.session_state.get("theta_nu_days", 10.0),min_value=0.0)
 cl_factor      = st.sidebar.selectbox("Control limit width (SE multiples)", [1.0, 1.5, 2.0, 2.5], index=2)
+
 
 # Simulation settings
 st.sidebar.header("Simulation settings")
