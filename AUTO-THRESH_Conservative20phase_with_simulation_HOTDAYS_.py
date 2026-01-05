@@ -413,83 +413,111 @@ except Exception as e:
 #######################################################################################
 # ---------------- Automatic Threshold Suggestion (data-driven) ----------------
 ###########################################################################################
+
+# ---------------- Automatic Threshold Suggestion (stable) ----------------
 st.markdown("---")
 st.subheader("Automatic threshold suggestion")
 st.caption("Data-driven thresholds based on baseline circular variability and parameter SEs.")
 
-# Helper: circular resultant length and circular std (Fisher, 1995)
 def _circular_stats(angles_rad: np.ndarray):
     if angles_rad.size == 0:
         return np.nan, np.nan
     C = np.nanmean(np.cos(angles_rad))
     S = np.nanmean(np.sin(angles_rad))
     R = np.sqrt(C*C + S*S)
-    # Circular standard deviation (radians)
     s = np.sqrt(np.maximum(0.0, -2.0*np.log(np.clip(R, 1e-12, 1.0))))
     return R, s
 
 sens = st.radio("Sensitivity level", ["Early warning", "Balanced", "Trend detection"], index=0, horizontal=True)
 mult = {"Early warning": 2.0, "Balanced": 3.0, "Trend detection": 4.0}[sens]
 
-# Compute variability from baseline hot-day phases if available; otherwise from baseline daily DOY
-try:
-    # Prefer phi_base from SS-GvM ingestion if present
-    phi_source = None
-    if 'phi_base' in globals() and isinstance(phi_base, np.ndarray) and phi_base.size>0:
-        phi_source = phi_base
-    else:
-        # Fallback: build phases from baseline daily Tmax
-        df_base_daily = hotdays_fetch_daily(st.session_state.get('hot_lat', LAT), st.session_state.get('hot_lon', LON),
+# Build a key that changes when any relevant inputs change
+suggest_key = {
+    "baseline_start": str(baseline_start),
+    "baseline_end":   str(baseline_end),
+    "monitor_start":  str(monitor_start),
+    "monitor_end":    str(monitor_end),
+    "quantile_q":     float(quantile_q),
+    "n_starts":       int(n_starts),
+    "sens":           sens
+}
+
+# Decide if we need to (re)compute suggestions
+need_recompute = (
+    "suggested_thresholds" not in st.session_state
+    or st.session_state["suggested_thresholds"].get("key") != suggest_key
+)
+
+if need_recompute:
+    # Prefer phi_base from earlier ingestion; we already cached fits & SEs above
+    phi_source = phi_base if isinstance(phi_base, np.ndarray) and phi_base.size > 0 else None
+    if phi_source is None:
+        # Fallback: build phases from baseline daily Tmax (cached fetch)
+        df_base_daily = hotdays_fetch_daily(st.session_state.get('hot_lat', LAT),
+                                            st.session_state.get('hot_lon', LON),
                                             str(baseline_start), str(baseline_end))
         if not df_base_daily.empty:
             doy = pd.to_datetime(df_base_daily['date']).dt.dayofyear.values
-            phi = 2*np.pi*(doy-1)/365.0
-            phi_source = phi
+            phi_source = 2*np.pi*(doy-1)/365.0
 
-    if phi_source is None or len(phi_source)==0:
+    if phi_source is None or len(phi_source) == 0:
         st.warning("Insufficient baseline phase data to compute suggestions.")
+        # Store a minimal record so Apply won't try to write NaNs
+        st.session_state["suggested_thresholds"] = {"key": suggest_key, "values": None}
     else:
-        R, s_rad = _circular_stats(np.asarray(phi_source))
+        # Use cached/semi-deterministic SEs
+        _, s_rad = _circular_stats(np.asarray(phi_source))
         s_days = (s_rad/(2*np.pi))*365.0
-        # Recommended thresholds
+
+        # Optionally clamp extreme thresholds to avoid huge swings
         rec_mu1 = float(mult*s_days)
         rec_mu2 = float(mult*s_days)
-        # Skew & skew orientation from baseline SEs if available
+        # Example clamp (optional, uncomment if wanted):
+        # rec_mu1 = min(rec_mu1, 150.0)
+        # rec_mu2 = min(rec_mu2, 150.0)
+
         rec_eta = None; rec_nu_days = None
         try:
-            if 'se_base' in globals() and isinstance(se_base, (list, np.ndarray)) and len(se_base)>=6:
-                # eta SE ~ scale of variability; use multiplier
+            if isinstance(se_base, (list, np.ndarray)) and len(se_base) >= 6:
                 rec_eta = float(mult*float(se_base[4]))
-                # nu SE is in radians -> convert to days
-                nu_se = float(se_base[5])
+                nu_se   = float(se_base[5])
                 rec_nu_days = float(mult*((nu_se/(2*np.pi))*365.0))
         except Exception:
             pass
 
-        cols = st.columns(4)
-        cols[0].metric("Suggested θ_mu1 (days)", f"{rec_mu1:.1f}")
-        cols[1].metric("Suggested θ_mu2 (days)", f"{rec_mu2:.1f}")
-        if rec_eta is not None:
-            cols[2].metric("Suggested θ_eta", f"{rec_eta:.3f}")
-        if rec_nu_days is not None:
-            cols[3].metric("Suggested θ_nu (days)", f"{rec_nu_days:.1f}")
+        st.session_state["suggested_thresholds"] = {
+            "key": suggest_key,
+            "values": {
+                "theta_mu1_days": rec_mu1,
+                "theta_mu2_days": rec_mu2,
+                "theta_eta":      rec_eta if rec_eta is not None else float(st.session_state['theta_eta']),
+                "theta_nu_days":  rec_nu_days if rec_nu_days is not None else float(st.session_state['theta_nu_days'])
+            }
+        }
 
-        # ---- Patch 3: Apply writes to session_state and forces rerun ----
-        if st.button("Apply suggested thresholds"):
-            st.session_state['theta_mu1_days'] = float(rec_mu1)
-            st.session_state['theta_mu2_days'] = float(rec_mu2)
-            if rec_eta is not None:
-                st.session_state['theta_eta'] = float(rec_eta)
-            if rec_nu_days is not None:
-                st.session_state['theta_nu_days'] = float(rec_nu_days)
-            # Force immediate rerun so sidebar shows new values and downstream recomputes
-            try:
-                st.rerun()  # Streamlit >= 1.27
-            except AttributeError:
-                st.experimental_rerun()  # older fallback
+# Always display the stored suggestions (stable)
+stored = st.session_state.get("suggested_thresholds", {}).get("values")
+if stored:
+    cols = st.columns(4)
+    cols[0].metric("Suggested θ_mu1 (days)", f"{stored['theta_mu1_days']:.1f}")
+    cols[1].metric("Suggested θ_mu2 (days)", f"{stored['theta_mu2_days']:.1f}")
+    cols[2].metric("Suggested θ_eta",       f"{stored['theta_eta']:.3f}")
+    cols[3].metric("Suggested θ_nu (days)", f"{stored['theta_nu_days']:.1f}")
+else:
+    st.info("Suggestions not available yet. Run the analysis above to populate baseline data.")
 
-except Exception as _e:
-    st.info(f"Threshold suggestion skipped: {_e}")
+# Apply only writes the stored snapshot to the sidebar keys and reruns
+if st.button("Apply suggested thresholds"):
+    if stored:
+        st.session_state['theta_mu1_days'] = float(stored['theta_mu1_days'])
+        st.session_state['theta_mu2_days'] = float(stored['theta_mu2_days'])
+        st.session_state['theta_eta']      = float(stored['theta_eta'])
+        st.session_state['theta_nu_days']  = float(stored['theta_nu_days'])
+    # Force immediate rerun; suggestions remain identical because the key hasn't changed
+    try:
+        st.rerun()
+    except AttributeError:
+        st.experimental_rerun()
 
 
 
