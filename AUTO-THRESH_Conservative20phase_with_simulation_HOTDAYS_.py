@@ -199,7 +199,7 @@ cl_factor      = st.sidebar.selectbox("Control limit width (SE multiples)", [1.0
 
 # Simulation settings
 st.sidebar.header("Simulation settings")
-horizon_days   = st.sidebar.slider("Horizon (days)", 180, 365, 365, step=15)
+horizon_days   = st.sidebar.slider("Horizon (days)", 7,30, 60,90, 180, 365, 365, step=1)
 step_days      = st.sidebar.selectbox("Time step (days)", [1, 3, 7, 14, 30], index=2)
 n_paths        = st.sidebar.slider("Monte Carlo paths", 1000, 20000, 5000, step=1000)
 trend_mu       = st.sidebar.slider("Trend continuation (mu1)", 0.0, 1.0, 0.6)
@@ -643,13 +643,19 @@ try:
             cols[3].metric("Suggested θ_nu (days)", f"{rec_nu_days:.1f}")
 
         # Optional: apply to session_state for convenience
-        if st.button("Apply suggested thresholds"):
-            st.session_state['theta_mu1_days'] = rec_mu1
-            st.session_state['theta_mu2_days'] = rec_mu2
-            if rec_eta is not None:
-                st.session_state['theta_eta'] = rec_eta
-            if rec_nu_days is not None:
-                st.session_state['theta_nu_days'] = rec_nu_days
-            st.success("Suggested thresholds stored in session state. Adjust original sidebar inputs to match if needed.")
-except Exception as _e:
-    st.info(f"Threshold suggestion skipped: {_e}")
+        
+if st.button("Apply suggested thresholds"):
+    # write new values into session_state
+    st.session_state['theta_mu1_days'] = rec_mu1
+    st.session_state['theta_mu2_days'] = rec_mu2
+    if rec_eta is not None:
+        st.session_state['theta_eta'] = rec_eta
+    if rec_nu_days is not None:
+        st.session_state['theta_nu_days'] = rec_nu_days
+
+    # optional visual confirmation
+    st.success("Suggested thresholds stored in session state. Sidebar now reflects these values.")
+
+    # ✅ force a rerun so widgets rebuild with updated session_state
+    st.rerun()
+
