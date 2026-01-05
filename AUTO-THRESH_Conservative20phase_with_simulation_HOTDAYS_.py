@@ -9,7 +9,8 @@ import matplotlib.pyplot as plt
 from datetime import date
 from scipy import optimize
 import requests
-rng_fit = np.random.default_rng(12345)
+seed=12345
+rng_fit = np.random.default_rng(seed)
 
 TWO_PI = 2*np.pi
 LAT, LON = -28.7419, 24.7719  # Kimberley
@@ -66,7 +67,7 @@ def fit_ssgvm_mle_all_starts(data, n_starts=30):
     bounds = optimize.Bounds([0,0,0,0,-0.999,0],[TWO_PI,TWO_PI,35.0,35.0,0.999,TWO_PI])
     best = {'x': None, 'fun': np.inf}
     for _ in range(n_starts):
-        rng_fit = np.random.default_rng(12345)# seed
+        rng_fit = np.random.default_rng(seed)# seed
         init = np.array([
             np.random.rand()*TWO_PI, np.random.rand()*TWO_PI,
             np.random.gamma(2.0,1.0), np.random.gamma(2.0,1.0),
@@ -322,7 +323,7 @@ try:
     st.pyplot(fig)
 
     # ---------- Simulation ----------
-    st.subheader("Multi-parameter simulation (next year)")
+    st.subheader("One year ahead Multi-parameter simulation")
     st.markdown("Stochastic projections for mu1, mu2, k1, k2, eta using phase drift + OU dynamics.")
 
     # Volatility fallbacks (sensitive defaults)
@@ -409,6 +410,90 @@ except Exception as e:
     st.error(f"Data, fitting, or simulation failed: {e}")
     st.info("Tip: Ensure sufficient hot-day samples, adjust quantile or windows, and verify network access.")
 
+#######################################################################################
+# ---------------- Automatic Threshold Suggestion (data-driven) ----------------
+###########################################################################################
+st.markdown("---")
+st.subheader("Automatic threshold suggestion")
+st.caption("Data-driven thresholds based on baseline circular variability and parameter SEs.")
+
+# Helper: circular resultant length and circular std (Fisher, 1995)
+def _circular_stats(angles_rad: np.ndarray):
+    if angles_rad.size == 0:
+        return np.nan, np.nan
+    C = np.nanmean(np.cos(angles_rad))
+    S = np.nanmean(np.sin(angles_rad))
+    R = np.sqrt(C*C + S*S)
+    # Circular standard deviation (radians)
+    s = np.sqrt(np.maximum(0.0, -2.0*np.log(np.clip(R, 1e-12, 1.0))))
+    return R, s
+
+sens = st.radio("Sensitivity level", ["Early warning", "Balanced", "Trend detection"], index=0, horizontal=True)
+mult = {"Early warning": 2.0, "Balanced": 3.0, "Trend detection": 4.0}[sens]
+
+# Compute variability from baseline hot-day phases if available; otherwise from baseline daily DOY
+try:
+    # Prefer phi_base from SS-GvM ingestion if present
+    phi_source = None
+    if 'phi_base' in globals() and isinstance(phi_base, np.ndarray) and phi_base.size>0:
+        phi_source = phi_base
+    else:
+        # Fallback: build phases from baseline daily Tmax
+        df_base_daily = hotdays_fetch_daily(st.session_state.get('hot_lat', LAT), st.session_state.get('hot_lon', LON),
+                                            str(baseline_start), str(baseline_end))
+        if not df_base_daily.empty:
+            doy = pd.to_datetime(df_base_daily['date']).dt.dayofyear.values
+            phi = 2*np.pi*(doy-1)/365.0
+            phi_source = phi
+
+    if phi_source is None or len(phi_source)==0:
+        st.warning("Insufficient baseline phase data to compute suggestions.")
+    else:
+        R, s_rad = _circular_stats(np.asarray(phi_source))
+        s_days = (s_rad/(2*np.pi))*365.0
+        # Recommended thresholds
+        rec_mu1 = float(mult*s_days)
+        rec_mu2 = float(mult*s_days)
+        # Skew & skew orientation from baseline SEs if available
+        rec_eta = None; rec_nu_days = None
+        try:
+            if 'se_base' in globals() and isinstance(se_base, (list, np.ndarray)) and len(se_base)>=6:
+                # eta SE ~ scale of variability; use multiplier
+                rec_eta = float(mult*float(se_base[4]))
+                # nu SE is in radians -> convert to days
+                nu_se = float(se_base[5])
+                rec_nu_days = float(mult*((nu_se/(2*np.pi))*365.0))
+        except Exception:
+            pass
+
+        cols = st.columns(4)
+        cols[0].metric("Suggested θ_mu1 (days)", f"{rec_mu1:.1f}")
+        cols[1].metric("Suggested θ_mu2 (days)", f"{rec_mu2:.1f}")
+        if rec_eta is not None:
+            cols[2].metric("Suggested θ_eta", f"{rec_eta:.3f}")
+        if rec_nu_days is not None:
+            cols[3].metric("Suggested θ_nu (days)", f"{rec_nu_days:.1f}")
+
+        # ---- Patch 3: Apply writes to session_state and forces rerun ----
+        if st.button("Apply suggested thresholds"):
+            st.session_state['theta_mu1_days'] = float(rec_mu1)
+            st.session_state['theta_mu2_days'] = float(rec_mu2)
+            if rec_eta is not None:
+                st.session_state['theta_eta'] = float(rec_eta)
+            if rec_nu_days is not None:
+                st.session_state['theta_nu_days'] = float(rec_nu_days)
+            # Force immediate rerun so sidebar shows new values and downstream recomputes
+            try:
+                st.rerun()  # Streamlit >= 1.27
+            except AttributeError:
+                st.experimental_rerun()  # older fallback
+
+except Exception as _e:
+    st.info(f"Threshold suggestion skipped: {_e}")
+
+
+
+###################################################################################
 # ---------------- Hot Days Benchmarking (add-on) ----------------
 # Historical percentile calc + Auto-suggest + WMO preset + Visual charts
 import io as _io
@@ -599,95 +684,4 @@ if run_hot:
 
 st.caption("Tip: Use the 🌍 WMO preset to quickly align with ≥90th percentile and 3‑day heatwave duration.")
 
-# ---------------- Automatic Threshold Suggestion (data-driven) ----------------
-st.markdown("---")
-st.subheader("Automatic threshold suggestion")
-st.caption("Data-driven thresholds based on baseline circular variability and parameter SEs.")
 
-# Helper: circular resultant length and circular std (Fisher, 1995)
-def _circular_stats(angles_rad: np.ndarray):
-    if angles_rad.size == 0:
-        return np.nan, np.nan
-    C = np.nanmean(np.cos(angles_rad))
-    S = np.nanmean(np.sin(angles_rad))
-    R = np.sqrt(C*C + S*S)
-    # Circular standard deviation (radians)
-    s = np.sqrt(np.maximum(0.0, -2.0*np.log(np.clip(R, 1e-12, 1.0))))
-    return R, s
-
-sens = st.radio("Sensitivity level", ["Early warning", "Balanced", "Trend detection"], index=0, horizontal=True)
-mult = {"Early warning": 2.0, "Balanced": 3.0, "Trend detection": 4.0}[sens]
-
-# Compute variability from baseline hot-day phases if available; otherwise from baseline daily DOY
-try:
-    # Prefer phi_base from SS-GvM ingestion if present
-    phi_source = None
-    if 'phi_base' in globals() and isinstance(phi_base, np.ndarray) and phi_base.size>0:
-        phi_source = phi_base
-    else:
-        # Fallback: build phases from baseline daily Tmax
-        df_base_daily = hotdays_fetch_daily(st.session_state.get('hot_lat', LAT), st.session_state.get('hot_lon', LON),
-                                            str(baseline_start), str(baseline_end))
-        if not df_base_daily.empty:
-            doy = pd.to_datetime(df_base_daily['date']).dt.dayofyear.values
-            phi = 2*np.pi*(doy-1)/365.0
-            phi_source = phi
-
-    if phi_source is None or len(phi_source)==0:
-        st.warning("Insufficient baseline phase data to compute suggestions.")
-    else:
-        R, s_rad = _circular_stats(np.asarray(phi_source))
-        s_days = (s_rad/(2*np.pi))*365.0
-        # Recommended thresholds
-        rec_mu1 = float(mult*s_days)
-        rec_mu2 = float(mult*s_days)
-        # Skew & skew orientation from baseline SEs if available
-        rec_eta = None; rec_nu_days = None
-        try:
-            if 'se_base' in globals() and isinstance(se_base, (list, np.ndarray)) and len(se_base)>=6:
-                # eta SE ~ scale of variability; use multiplier
-                rec_eta = float(mult*float(se_base[4]))
-                # nu SE is in radians -> convert to days
-                nu_se = float(se_base[5])
-                rec_nu_days = float(mult*((nu_se/(2*np.pi))*365.0))
-        except Exception:
-            pass
-
-        cols = st.columns(4)
-        cols[0].metric("Suggested θ_mu1 (days)", f"{rec_mu1:.1f}")
-        cols[1].metric("Suggested θ_mu2 (days)", f"{rec_mu2:.1f}")
-        if rec_eta is not None:
-            cols[2].metric("Suggested θ_eta", f"{rec_eta:.3f}")
-        if rec_nu_days is not None:
-            cols[3].metric("Suggested θ_nu (days)", f"{rec_nu_days:.1f}")
-
-        # ---- Patch 3: Apply writes to session_state and forces rerun ----
-        if st.button("Apply suggested thresholds"):
-            st.session_state['theta_mu1_days'] = float(rec_mu1)
-            st.session_state['theta_mu2_days'] = float(rec_mu2)
-            if rec_eta is not None:
-                st.session_state['theta_eta'] = float(rec_eta)
-            if rec_nu_days is not None:
-                st.session_state['theta_nu_days'] = float(rec_nu_days)
-            # Force immediate rerun so sidebar shows new values and downstream recomputes
-            try:
-                st.rerun()  # Streamlit >= 1.27
-            except AttributeError:
-                st.experimental_rerun()  # older fallback
-
-except Exception as _e:
-    st.info(f"Threshold suggestion skipped: {_e}")
-
-# ---------------- Download this app (patched) source ----------------
-# (NOT Patch 4; this is a convenience to export the entire app file)
-try:
-    with open(__file__, 'r', encoding='utf-8') as _srcf:
-        _src = _srcf.read()
-    st.download_button(
-        "📦 Download this app (patched) source (.py)",
-        data=_src,
-        file_name="AUTO-THRESH_Conservative20phase_with_simulation_HOTDAYS_patched.py",
-        mime="text/x-python"
-    )
-except Exception as _e_src:
-    st.caption(f"Source download unavailable: {_e_src}")
