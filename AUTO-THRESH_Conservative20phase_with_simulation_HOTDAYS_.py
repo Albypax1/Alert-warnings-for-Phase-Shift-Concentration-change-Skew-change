@@ -10,6 +10,7 @@ from datetime import date
 from scipy import optimize
 import requests
 rng_fit = np.random.default_rng(12345)
+
 TWO_PI = 2*np.pi
 LAT, LON = -28.7419, 24.7719  # Kimberley
 TIMEZONE = "Africa/Johannesburg"
@@ -65,6 +66,7 @@ def fit_ssgvm_mle_all_starts(data, n_starts=30):
     bounds = optimize.Bounds([0,0,0,0,-0.999,0],[TWO_PI,TWO_PI,35.0,35.0,0.999,TWO_PI])
     best = {'x': None, 'fun': np.inf}
     for _ in range(n_starts):
+        rng_fit = np.random.default_rng(12345)# seed
         init = np.array([
             np.random.rand()*TWO_PI, np.random.rand()*TWO_PI,
             np.random.gamma(2.0,1.0), np.random.gamma(2.0,1.0),
