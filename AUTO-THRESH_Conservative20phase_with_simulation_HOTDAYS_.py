@@ -1,8 +1,7 @@
 
 # -*- coding: utf-8 -*-
 # SS-GvM Monitoring + Simulation — Kimberley (Updated: SE fallbacks, mu2 drift, sensitive thresholds)
-# Author: M365 Copilot | Date: 2026-01-03
-
+# Author: M365 Copilot \ Date: 2026-01-03
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -129,7 +128,6 @@ def fetch_hotday_phases(start_date: str, end_date: str, q=0.90):
     return phi, df
 
 # ---------------- Simulators ----------------
-
 def simulate_angles(mu_base, mu_mon, drift_factor, sigma_per_day, horizon_days, step_days, n_paths, seed=42):
     rng = np.random.default_rng(seed)
     delta_obs = circ_diff(mu_mon, mu_base)
@@ -180,46 +178,68 @@ def simulate_eta_ou(eta_base, eta_init, se_eta_base, alpha=0.05, horizon_days=36
 
 # ---------------- UI ----------------
 st.title("SS-GvM Monitoring + Simulation — Kimberley (Updated)")
-
 st.sidebar.header("Configuration")
 baseline_start = st.sidebar.date_input("Baseline start", date(2019,1,1))
-baseline_end   = st.sidebar.date_input("Baseline end",   date(2023,12,31))
-monitor_start  = st.sidebar.date_input("Monitor start",  date(2024,1,1))
-monitor_end    = st.sidebar.date_input("Monitor end",    date.today())
-quantile_q     = st.sidebar.slider("Hot-day threshold quantile", 0.80, 0.99, 0.90)
-n_starts       = st.sidebar.slider("MLE multi-starts", 10, 60, 30, step=5)
+baseline_end = st.sidebar.date_input("Baseline end", date(2023,12,31))
+monitor_start = st.sidebar.date_input("Monitor start", date(2024,1,1))
+monitor_end = st.sidebar.date_input("Monitor end", date.today())
+quantile_q = st.sidebar.slider("Hot-day threshold quantile", 0.80, 0.99, 0.90)
+n_starts = st.sidebar.slider("MLE multi-starts", 10, 60, 30, step=5)
+
+# ---- Patch 1: Session defaults for thresholds (once) ----
+if 'theta_mu1_days' not in st.session_state: st.session_state['theta_mu1_days'] = 10.0
+if 'theta_mu2_days' not in st.session_state: st.session_state['theta_mu2_days'] = 7.0
+if 'theta_eta'       not in st.session_state: st.session_state['theta_eta']       = 0.05
+if 'theta_nu_days'   not in st.session_state: st.session_state['theta_nu_days']   = 10.0
 
 # Alert thresholds (sensitive defaults to help curves move)
 st.sidebar.header("Alert thresholds")
-theta_mu1_days = st.sidebar.number_input("Phase shift threshold mu1 (days)", key="theta_mu1_days",
-    value=st.session_state.get("theta_mu1_days", 10.0), min_value=0.0)
 
-theta_mu2_days = st.sidebar.number_input("Phase shift threshold mu2 (days)",key="theta_mu2_days", value=st.session_state.get("theta_mu2_days", 7.0),
-    min_value=0.0)
-theta_eta = st.sidebar.number_input("Skew change threshold (eta)", key="theta_eta",value=st.session_state.get("theta_eta", 0.05),
-    min_value=0.0)
-theta_nu_days = st.sidebar.number_input("Skew orientation threshold nu (days)",key="theta_nu_days",
-    value=st.session_state.get("theta_nu_days", 10.0),min_value=0.0)
-cl_factor      = st.sidebar.selectbox("Control limit width (SE multiples)", [1.0, 1.5, 2.0, 2.5], index=2)
+# ---- Patch 2: Keyed sidebar widgets bound to session_state ----
+theta_mu1_days = st.sidebar.number_input(
+    "Phase shift threshold mu1 (days)",
+    min_value=0.0,
+    value=float(st.session_state['theta_mu1_days']),
+    key='theta_mu1_days'
+)
+theta_mu2_days = st.sidebar.number_input(
+    "Phase shift threshold mu2 (days)",
+    min_value=0.0,
+    value=float(st.session_state['theta_mu2_days']),
+    key='theta_mu2_days'
+)
+theta_eta = st.sidebar.number_input(
+    "Skew change threshold (eta)",
+    min_value=0.0,
+    value=float(st.session_state['theta_eta']),
+    key='theta_eta'
+)
+theta_nu_days = st.sidebar.number_input(
+    "Skew orientation threshold nu (days)",
+    min_value=0.0,
+    value=float(st.session_state['theta_nu_days']),
+    key='theta_nu_days'
+)
 
+cl_factor = st.sidebar.selectbox("Control limit width (SE multiples)", [1.0, 1.5, 2.0, 2.5], index=2)
 
 # Simulation settings
 st.sidebar.header("Simulation settings")
-horizon_days   = st.sidebar.slider("Horizon (days)", 180, 365, 365, step=15)
-step_days      = st.sidebar.selectbox("Time step (days)", [1, 3, 7, 14, 30], index=2)
-n_paths        = st.sidebar.slider("Monte Carlo paths", 1000, 20000, 5000, step=1000)
-trend_mu       = st.sidebar.slider("Trend continuation (mu1)", 0.0, 1.0, 0.6)
-trend_mu2      = st.sidebar.slider("Trend continuation (mu2)", 0.0, 1.0, 0.7)
-alpha_k        = st.sidebar.slider("Mean reversion (k1,k2) OU alpha", 0.00, 0.50, 0.05)
-alpha_eta      = st.sidebar.slider("Mean reversion (eta) OU alpha", 0.00, 0.50, 0.05)
+horizon_days = st.sidebar.slider("Horizon (days)", 180, 365, 365, step=15)
+step_days    = st.sidebar.selectbox("Time step (days)", [1, 3, 7, 14, 30], index=2)
+n_paths      = st.sidebar.slider("Monte Carlo paths", 1000, 20000, 5000, step=1000)
+trend_mu     = st.sidebar.slider("Trend continuation (mu1)", 0.0, 1.0, 0.6)
+trend_mu2    = st.sidebar.slider("Trend continuation (mu2)", 0.0, 1.0, 0.7)
+alpha_k      = st.sidebar.slider("Mean reversion (k1,k2) OU alpha", 0.00, 0.50, 0.05)
+alpha_eta    = st.sidebar.slider("Mean reversion (eta) OU alpha", 0.00, 0.50, 0.05)
 
 labels = ["mu1","mu2","k1","k2","eta","nu"]
 
 try:
     # Ingest
     phi_base, df_base = fetch_hotday_phases(str(baseline_start), str(baseline_end), q=quantile_q)
-    phi_mon,  df_mon  = fetch_hotday_phases(str(monitor_start),  str(monitor_end),  q=quantile_q)
-    st.write(f"Baseline hot-day samples: {len(phi_base)} | Monitoring hot-day samples: {len(phi_mon)}")
+    phi_mon,  df_mon  = fetch_hotday_phases(str(monitor_start), str(monitor_end), q=quantile_q)
+    st.write(f"Baseline hot-day samples: {len(phi_base)} \n Monitoring hot-day samples: {len(phi_mon)}")
 
     # Fit
     params_base, ll_base = fit_ssgvm_mle_all_starts(phi_base, n_starts=n_starts)
@@ -236,11 +256,11 @@ try:
     st.markdown("**Monitoring parameters:**")
     st.dataframe(mon_df)
 
-    # ---------------- Alerts ----------------
+    # ---------- Alerts ----------
     mu1_base, mu1_mon = params_base[0], params_mon[0]
     mu2_base, mu2_mon = params_base[1], params_mon[1]
-    k1_base, k2_base  = params_base[2], params_base[3]
-    k1_mon,  k2_mon   = params_mon[2], params_mon[3]
+    k1_base,  k2_base = params_base[2], params_base[3]
+    k1_mon,   k2_mon  = params_mon[2], params_mon[3]
     eta_base, eta_mon = params_base[4], params_mon[4]
     nu_base,  nu_mon  = params_base[5], params_mon[5]
 
@@ -277,7 +297,7 @@ try:
     else:
         st.success("No alerts triggered under current thresholds.")
 
-    # ---------------- Density visualization ----------------
+    # ---------- Density visualization ----------
     st.subheader("Baseline vs Monitoring density")
     days = np.arange(1, 366)
     theta_grid = 2*np.pi*days/365.0
@@ -292,14 +312,14 @@ try:
     dens_mon  = ssgvm_density(params_mon,  theta_grid)
 
     fig, ax = plt.subplots(figsize=(10,4))
-    ax.plot(days, dens_base, label="Baseline", color="steelblue", lw=2)
-    ax.plot(days, dens_mon,  label="Monitoring", color="crimson",  lw=2)
+    ax.plot(days, dens_base, label="Baseline",   color="steelblue", lw=2)
+    ax.plot(days, dens_mon,  label="Monitoring", color="crimson",   lw=2)
     ax.set_xlabel("Day of Year"); ax.set_ylabel("Probability density")
     ax.set_title("SS-GvM density: baseline vs monitoring")
     ax.legend(); ax.grid(alpha=0.3)
     st.pyplot(fig)
 
-    # ---------------- Simulation ----------------
+    # ---------- Simulation ----------
     st.subheader("Multi-parameter simulation (next year)")
     st.markdown("Stochastic projections for mu1, mu2, k1, k2, eta using phase drift + OU dynamics.")
 
@@ -310,45 +330,44 @@ try:
     grid_days, paths_mu1 = simulate_angles(mu1_base, mu1_mon, trend_mu,  sigma_mu1_day, horizon_days, step_days, n_paths, seed=42)
     _,         paths_mu2 = simulate_angles(mu2_base, mu2_mon, trend_mu2, sigma_mu2_day, horizon_days, step_days, n_paths, seed=43)
 
-    grid_days_k1, paths_k1 = simulate_k_log_ou(k1_base, k1_mon, se_base[2], alpha=alpha_k,   horizon_days=horizon_days, step_days=step_days, n_paths=n_paths, seed=44)
-    grid_days_k2, paths_k2 = simulate_k_log_ou(k2_base, k2_mon, se_base[3], alpha=alpha_k,   horizon_days=horizon_days, step_days=step_days, n_paths=n_paths, seed=45)
-    grid_days_eta, paths_eta = simulate_eta_ou(eta_base, eta_mon, se_base[4], alpha=alpha_eta, horizon_days=horizon_days, step_days=step_days, n_paths=n_paths, seed=46)
+    grid_days_k1, paths_k1 = simulate_k_log_ou(k1_base, k1_mon, se_base[2], alpha=alpha_k,  horizon_days=horizon_days, step_days=step_days, n_paths=n_paths, seed=44)
+    grid_days_k2, paths_k2 = simulate_k_log_ou(k2_base, k2_mon, se_base[3], alpha=alpha_k,  horizon_days=horizon_days, step_days=step_days, n_paths=n_paths, seed=45)
+    grid_days_eta,paths_eta= simulate_eta_ou(eta_base, eta_mon, se_base[4], alpha=alpha_eta, horizon_days=horizon_days, step_days=step_days, n_paths=n_paths, seed=46)
 
     # Probabilities across the grid
     prob_mu1 = (paths_mu1 > theta_mu1_days).mean(axis=0)
     prob_mu2 = (paths_mu2 > theta_mu2_days).mean(axis=0)
-    prob_k1  = ((paths_k1 > k1_upper) | (paths_k1 < k1_lower)).mean(axis=0)
-    prob_k2  = ((paths_k2 > k2_upper) | (paths_k2 < k2_lower)).mean(axis=0)
+    prob_k1  = ((paths_k1  > k1_upper) | (paths_k1  < k1_lower)).mean(axis=0)
+    prob_k2  = ((paths_k2  > k2_upper) | (paths_k2  < k2_lower)).mean(axis=0)
     prob_eta = (np.abs(paths_eta - eta_base) > theta_eta).mean(axis=0)
 
     # Monthly summary (approximate: month m ~ day 30.4*m)
     month_days = (np.arange(1,13) * 30.4).astype(int)
     summary_rows = []
     for m_idx, d in enumerate(month_days, start=1):
-        i_mu = min(np.searchsorted(grid_days, d), len(grid_days)-1)
-        i_k1 = min(np.searchsorted(grid_days_k1, d), len(grid_days_k1)-1)
-        i_k2 = min(np.searchsorted(grid_days_k2, d), len(grid_days_k2)-1)
-        i_et = min(np.searchsorted(grid_days_eta, d), len(grid_days_eta)-1)
+        i_mu = min(np.searchsorted(grid_days,    d), len(grid_days)    - 1)
+        i_k1 = min(np.searchsorted(grid_days_k1, d), len(grid_days_k1) - 1)
+        i_k2 = min(np.searchsorted(grid_days_k2, d), len(grid_days_k2) - 1)
+        i_et = min(np.searchsorted(grid_days_eta,d), len(grid_days_eta) - 1)
         summary_rows.append({
             "MonthAhead": m_idx,
             f"P(Delta mu1 > {theta_mu1_days:.1f}d)": prob_mu1[i_mu],
             f"P(Delta mu2 > {theta_mu2_days:.1f}d)": prob_mu2[i_mu],
             "P(k1 outside CL)": prob_k1[i_k1],
             "P(k2 outside CL)": prob_k2[i_k2],
-            f"P(|Delta eta| > {theta_eta:.2f})": prob_eta[i_et],
+            f"P(\nDelta eta\n > {theta_eta:.2f})": prob_eta[i_et],
         })
     monthly_summary = pd.DataFrame(summary_rows)
-
     st.subheader("Monthly forward risk (probabilities)")
     st.dataframe(monthly_summary)
 
     # Probability curves
     fig_prob, axpr = plt.subplots(figsize=(10,5))
-    axpr.plot(grid_days,    prob_mu1, label=f"P(Delta mu1 > {theta_mu1_days:.1f}d)", color="navy")
-    axpr.plot(grid_days,    prob_mu2, label=f"P(Delta mu2 > {theta_mu2_days:.1f}d)", color="purple")
-    axpr.plot(grid_days_k1, prob_k1,  label="P(k1 outside CL)", color="teal")
-    axpr.plot(grid_days_k2, prob_k2,  label="P(k2 outside CL)", color="brown")
-    axpr.plot(grid_days_eta,prob_eta, label=f"P(|Delta eta| > {theta_eta:.2f})", color="darkgreen")
+    axpr.plot(grid_days,     prob_mu1, label=f"P(Delta mu1 > {theta_mu1_days:.1f}d)", color="navy")
+    axpr.plot(grid_days,     prob_mu2, label=f"P(Delta mu2 > {theta_mu2_days:.1f}d)", color="purple")
+    axpr.plot(grid_days_k1,  prob_k1,  label="P(k1 outside CL)",                       color="teal")
+    axpr.plot(grid_days_k2,  prob_k2,  label="P(k2 outside CL)",                       color="brown")
+    axpr.plot(grid_days_eta, prob_eta, label=f"P(\nDelta eta\n > {theta_eta:.2f})",     color="darkgreen")
     axpr.set_ylim(0,1); axpr.set_xlabel("Days ahead"); axpr.set_ylabel("Probability"); axpr.grid(alpha=0.3); axpr.legend(ncol=2)
     st.pyplot(fig_prob)
 
@@ -359,17 +378,16 @@ try:
         idx_mu = min(np.searchsorted(grid_days, H), len(grid_days)-1)
         rows.append({
             "Horizon_days": H,
-            "mu1_P5":   np.percentile(paths_mu1[:, idx_mu], 5),
-            "mu1_Med":  np.percentile(paths_mu1[:, idx_mu], 50),
-            "mu1_P95":  np.percentile(paths_mu1[:, idx_mu], 95),
-            "mu2_P5":   np.percentile(paths_mu2[:, idx_mu], 5),
-            "mu2_Med":  np.percentile(paths_mu2[:, idx_mu], 50),
-            "mu2_P95":  np.percentile(paths_mu2[:, idx_mu], 95),
+            "mu1_P5":  np.percentile(paths_mu1[:, idx_mu], 5),
+            "mu1_Med": np.percentile(paths_mu1[:, idx_mu], 50),
+            "mu1_P95": np.percentile(paths_mu1[:, idx_mu], 95),
+            "mu2_P5":  np.percentile(paths_mu2[:, idx_mu], 5),
+            "mu2_Med": np.percentile(paths_mu2[:, idx_mu], 50),
+            "mu2_P95": np.percentile(paths_mu2[:, idx_mu], 95),
             f"P(Delta mu1 > {theta_mu1_days:.1f}d)": prob_mu1[idx_mu],
             f"P(Delta mu2 > {theta_mu2_days:.1f}d)": prob_mu2[idx_mu],
         })
     quarterly = pd.DataFrame(rows)
-
     csv_monthly  = monthly_summary.to_csv(index=False).encode("utf-8")
     csv_quarterly= quarterly.to_csv(index=False).encode("utf-8")
     st.download_button("Download monthly probabilities (CSV)", data=csv_monthly,
@@ -389,13 +407,8 @@ except Exception as e:
     st.error(f"Data, fitting, or simulation failed: {e}")
     st.info("Tip: Ensure sufficient hot-day samples, adjust quantile or windows, and verify network access.")
 
-
-
-
-# -----------------------------
-# Hot Days Benchmarking (add-on)
+# ---------------- Hot Days Benchmarking (add-on) ----------------
 # Historical percentile calc + Auto-suggest + WMO preset + Visual charts
-# -----------------------------
 import io as _io
 import zipfile as _zipfile
 
@@ -435,13 +448,11 @@ def hotdays_fetch_daily(lat: float, lon: float, start: str, end: str, tz: str = 
     return df
 
 # Leap-day removal
-
 def _hotdays_fix_leap(df: pd.DataFrame):
     s = pd.to_datetime(df['date'])
     return df[~((s.dt.month == 2) & (s.dt.day == 29))].copy()
 
 # DOY percentile threshold
-
 def hotdays_compute_doy_percentile(df: pd.DataFrame, baseline_start: date, baseline_end: date,
                                    pctl: float = 90.0, window: int = 15) -> pd.DataFrame:
     if df.empty:
@@ -454,14 +465,13 @@ def hotdays_compute_doy_percentile(df: pd.DataFrame, baseline_start: date, basel
     base['doy'] = pd.to_datetime(base['date']).dt.dayofyear
     recs = []
     for doy in range(1, 366):
-        win = [((d-1) % 365) + 1 for d in list(range(doy-window, doy)) + list(range(doy, doy+window+1))]
+        win = [(((d-1) % 365) + 1) for d in list(range(doy-window, doy)) + list(range(doy, doy+window+1))]
         vals = base.loc[base['doy'].isin(win), 'tmax'].values
         thr = float(np.nanpercentile(vals, pctl)) if len(vals) else np.nan
         recs.append({'doy': doy, 'thresh': thr})
     return pd.DataFrame(recs)
 
 # Label series
-
 def hotdays_label(df_actual: pd.DataFrame, thresh_doy: pd.DataFrame):
     if df_actual.empty or thresh_doy.empty:
         return df_actual.assign(thresh=np.nan, hot_day=np.nan)
@@ -472,7 +482,6 @@ def hotdays_label(df_actual: pd.DataFrame, thresh_doy: pd.DataFrame):
     return tmp
 
 # Heatwaves
-
 def hotdays_heatwaves(binary_series: pd.Series, min_len: int = 3):
     runs = []
     in_run = False
@@ -502,24 +511,24 @@ hot_lon = colB.number_input("Longitude", value=float(st.session_state.hot_lon), 
 if autosuggest and place:
     with st.spinner('Finding places...'):
         res = hotdays_geocode(place)
-    if res:
-        best = res[0]
-        st.session_state.hot_lat = best.get('latitude', hot_lat)
-        st.session_state.hot_lon = best.get('longitude', hot_lon)
-        hot_lat, hot_lon = st.session_state.hot_lat, st.session_state.hot_lon
-        st.sidebar.success(f"Selected: {best.get('name')}, {best.get('country_code')} ({hot_lat:.3f}, {hot_lon:.3f})")
-    else:
-        st.sidebar.warning("No suggestions found.")
+        if res:
+            best = res[0]
+            st.session_state.hot_lat = best.get('latitude', hot_lat)
+            st.session_state.hot_lon = best.get('longitude', hot_lon)
+            hot_lat, hot_lon = st.session_state.hot_lat, st.session_state.hot_lon
+            st.sidebar.success(f"Selected: {best.get('name')}, {best.get('country_code')} ({hot_lat:.3f}, {hot_lon:.3f})")
+        else:
+            st.sidebar.warning("No suggestions found.")
 
 st.sidebar.header("Hot-day percentile & baseline")
 percentile = st.sidebar.slider("Percentile threshold (≥)", 50, 99, int(round(quantile_q*100)))
-win = st.sidebar.slider("Smoothing window (± days)", 5, 30, 15, 1)
-min_run = st.sidebar.slider("Heatwave min length (days)", 2, 7, 3, 1)
+win        = st.sidebar.slider("Smoothing window (± days)", 5, 30, 15, 1)
+min_run    = st.sidebar.slider("Heatwave min length (days)", 2, 7, 3, 1)
 if st.sidebar.button("🌍 WMO preset (user pref)"):
-    percentile = 90
+    percentile   = 90
     baseline_start = date(2015,1,1)
     baseline_end   = date(2025,12,31)
-    min_run = 3
+    min_run      = 3
     st.sidebar.info("Applied: ≥90th percentile, baseline 2015–2025, heatwave length ≥3 days")
 
 st.subheader("Daily Tmax vs historical percentile threshold")
@@ -527,68 +536,68 @@ run_hot = st.button("⬇️ Fetch & Analyze Hot Days")
 if run_hot:
     with st.spinner("Fetching daily Tmax for baseline & monitoring..."):
         df_base_daily = hotdays_fetch_daily(hot_lat, hot_lon, str(baseline_start), str(baseline_end))
-        df_mon_daily  = hotdays_fetch_daily(hot_lat, hot_lon, str(monitor_start), str(monitor_end))
-    if df_base_daily.empty or df_mon_daily.empty:
-        st.warning("No daily data returned for the given periods/location.")
-    else:
-        thr_doy = hotdays_compute_doy_percentile(df_base_daily, baseline_start, baseline_end,
-                                                 pctl=float(percentile), window=int(win))
-        labeled = hotdays_label(df_mon_daily, thr_doy)
-        runs = hotdays_heatwaves(labeled['hot_day'], min_len=int(min_run))
-        spans = []
-        for s, e in runs:
-            spans.append({'start': labeled.iloc[s]['date'],
-                          'end':   labeled.iloc[e]['date'],
-                          'length': int((pd.to_datetime(labeled.iloc[e]['date']) - pd.to_datetime(labeled.iloc[s]['date'])).days) + 1})
-        total_days = len(labeled)
-        hot_days = int(labeled['hot_day'].sum())
-        share = 100.0 * hot_days / total_days if total_days else 0.0
-        c1, c2, c3 = st.columns(3)
-        c1.metric("Monitoring days", f"{total_days}")
-        c2.metric("Hot days (≥ threshold)", f"{hot_days}", f"{share:.1f}%")
-        c3.metric(f"Heatwaves (≥{min_run} days)", f"{len(spans)}")
-        fig_ts, ax_ts = plt.subplots(figsize=(12,4))
-        ts_dates = pd.to_datetime(labeled['date'])
-        ax_ts.plot(ts_dates, labeled['tmax'], label='Tmax (°C)', color='#1f77b4', lw=1.2)
-        ax_ts.plot(ts_dates, labeled['thresh'], label=f"{percentile}th percentile threshold", color='#d62728', lw=1.2)
-        for sp in spans:
-            ax_ts.axvspan(pd.to_datetime(sp['start']), pd.to_datetime(sp['end']), color='orange', alpha=0.2)
-        ax_ts.set_ylabel('°C'); ax_ts.set_xlabel('Date'); ax_ts.legend(); ax_ts.grid(alpha=0.3)
-        st.pyplot(fig_ts, use_container_width=True)
-        fig_hist, ax_h = plt.subplots(figsize=(6,4))
-        ax_h.hist(labeled['tmax'], bins=40, color='#1f77b4', alpha=0.7, edgecolor='white')
-        med_thr = float(np.nanmedian(labeled['thresh']))
-        ax_h.axvline(med_thr, color='#d62728', ls='--', lw=2, label=f"Median threshold ≈ {med_thr:.1f}°C")
-        ax_h.set_xlabel('Tmax (°C)'); ax_h.set_ylabel('Frequency'); ax_h.legend(); ax_h.grid(alpha=0.3)
-        st.pyplot(fig_hist, use_container_width=True)
-        st.subheader("Detected heatwaves (monitoring period)")
-        if spans:
-            st.dataframe(pd.DataFrame(spans))
+        df_mon_daily  = hotdays_fetch_daily(hot_lat, hot_lon, str(monitor_start),  str(monitor_end))
+        if df_base_daily.empty or df_mon_daily.empty:
+            st.warning("No daily data returned for the given periods/location.")
         else:
-            st.info("No heatwaves meeting the criteria were detected.")
-        st.subheader("Downloads")
-        csv_lbl = labeled.to_csv(index=False).encode('utf-8')
-        st.download_button(label="Download labeled monitoring data (CSV)", data=csv_lbl,
-                           file_name="monitoring_labeled_hotdays.csv", mime="text/csv")
-        b1, b2 = _io.BytesIO(), _io.BytesIO()
-        fig_ts.savefig(b1, format='png', dpi=200, bbox_inches='tight'); b1.seek(0)
-        fig_hist.savefig(b2, format='png', dpi=200, bbox_inches='tight'); b2.seek(0)
-        zip_buf = _io.BytesIO()
-        with _zipfile.ZipFile(zip_buf, 'w', _zipfile.ZIP_DEFLATED) as zf:
-            zf.writestr('timeseries_threshold.png', b1.read())
-            zf.writestr('distribution_threshold.png', b2.read())
-        zip_buf.seek(0)
-        st.download_button(label="Download charts (ZIP)", data=zip_buf.getvalue(),
-                           file_name='hotdays_benchmark_charts.zip', mime='application/zip')
+            thr_doy = hotdays_compute_doy_percentile(df_base_daily, baseline_start, baseline_end,
+                                                     pctl=float(percentile), window=int(win))
+            labeled = hotdays_label(df_mon_daily, thr_doy)
+            runs = hotdays_heatwaves(labeled['hot_day'], min_len=int(min_run))
+            spans = []
+            for s, e in runs:
+                spans.append({'start': labeled.iloc[s]['date'],
+                              'end':   labeled.iloc[e]['date'],
+                              'length': int((pd.to_datetime(labeled.iloc[e]['date']) - pd.to_datetime(labeled.iloc[s]['date'])).days) + 1})
+            total_days = len(labeled)
+            hot_days = int(labeled['hot_day'].sum())
+            share = 100.0 * hot_days / total_days if total_days else 0.0
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Monitoring days", f"{total_days}")
+            c2.metric("Hot days (≥ threshold)", f"{hot_days}", f"{share:.1f}%")
+            c3.metric(f"Heatwaves (≥{min_run} days)", f"{len(spans)}")
+
+            fig_ts, ax_ts = plt.subplots(figsize=(12,4))
+            ts_dates = pd.to_datetime(labeled['date'])
+            ax_ts.plot(ts_dates, labeled['tmax'],   label='Tmax (°C)', color='#1f77b4', lw=1.2)
+            ax_ts.plot(ts_dates, labeled['thresh'], label=f"{percentile}th percentile threshold", color='#d62728', lw=1.2)
+            for sp in spans:
+                ax_ts.axvspan(pd.to_datetime(sp['start']), pd.to_datetime(sp['end']), color='orange', alpha=0.2)
+            ax_ts.set_ylabel('°C'); ax_ts.set_xlabel('Date'); ax_ts.legend(); ax_ts.grid(alpha=0.3)
+            st.pyplot(fig_ts, use_container_width=True)
+
+            fig_hist, ax_h = plt.subplots(figsize=(6,4))
+            ax_h.hist(labeled['tmax'], bins=40, color='#1f77b4', alpha=0.7, edgecolor='white')
+            med_thr = float(np.nanmedian(labeled['thresh']))
+            ax_h.axvline(med_thr, color='#d62728', ls='--', lw=2, label=f"Median threshold ≈ {med_thr:.1f}°C")
+            ax_h.set_xlabel('Tmax (°C)'); ax_h.set_ylabel('Frequency'); ax_h.legend(); ax_h.grid(alpha=0.3)
+            st.pyplot(fig_hist, use_container_width=True)
+
+            st.subheader("Detected heatwaves (monitoring period)")
+            if spans:
+                st.dataframe(pd.DataFrame(spans))
+            else:
+                st.info("No heatwaves meeting the criteria were detected.")
+
+            st.subheader("Downloads")
+            csv_lbl = labeled.to_csv(index=False).encode('utf-8')
+            st.download_button(label="Download labeled monitoring data (CSV)", data=csv_lbl,
+                               file_name="monitoring_labeled_hotdays.csv", mime="text/csv")
+
+            b1, b2 = _io.BytesIO(), _io.BytesIO()
+            fig_ts.savefig(b1, format='png', dpi=200, bbox_inches='tight'); b1.seek(0)
+            fig_hist.savefig(b2, format='png', dpi=200, bbox_inches='tight'); b2.seek(0)
+            zip_buf = _io.BytesIO()
+            with _zipfile.ZipFile(zip_buf, 'w', _zipfile.ZIP_DEFLATED) as zf:
+                zf.writestr('timeseries_threshold.png', b1.read())
+                zf.writestr('distribution_threshold.png', b2.read())
+            zip_buf.seek(0)
+            st.download_button(label="Download charts (ZIP)", data=zip_buf.getvalue(),
+                               file_name='hotdays_benchmark_charts.zip', mime='application/zip')
 
 st.caption("Tip: Use the 🌍 WMO preset to quickly align with ≥90th percentile and 3‑day heatwave duration.")
 
-
-
-
-# -----------------------------
-# Automatic Threshold Suggestion (data-driven)
-# -----------------------------
+# ---------------- Automatic Threshold Suggestion (data-driven) ----------------
 st.markdown("---")
 st.subheader("Automatic threshold suggestion")
 st.caption("Data-driven thresholds based on baseline circular variability and parameter SEs.")
@@ -615,11 +624,13 @@ try:
         phi_source = phi_base
     else:
         # Fallback: build phases from baseline daily Tmax
-        df_base_daily = hotdays_fetch_daily(st.session_state.get('hot_lat', LAT), st.session_state.get('hot_lon', LON), str(baseline_start), str(baseline_end))
+        df_base_daily = hotdays_fetch_daily(st.session_state.get('hot_lat', LAT), st.session_state.get('hot_lon', LON),
+                                            str(baseline_start), str(baseline_end))
         if not df_base_daily.empty:
             doy = pd.to_datetime(df_base_daily['date']).dt.dayofyear.values
             phi = 2*np.pi*(doy-1)/365.0
             phi_source = phi
+
     if phi_source is None or len(phi_source)==0:
         st.warning("Insufficient baseline phase data to compute suggestions.")
     else:
@@ -648,20 +659,33 @@ try:
         if rec_nu_days is not None:
             cols[3].metric("Suggested θ_nu (days)", f"{rec_nu_days:.1f}")
 
-        # Optional: apply to session_state for convenience
-       
-if st.button("Apply suggested thresholds"):
-    # write new values into session_state
-    st.session_state['theta_mu1_days'] = rec_mu1
-    st.session_state['theta_mu2_days'] = rec_mu2
-    if rec_eta is not None:
-        st.session_state['theta_eta'] = rec_eta
-    if rec_nu_days is not None:
-        st.session_state['theta_nu_days'] = rec_nu_days
+        # ---- Patch 3: Apply writes to session_state and forces rerun ----
+        if st.button("Apply suggested thresholds"):
+            st.session_state['theta_mu1_days'] = float(rec_mu1)
+            st.session_state['theta_mu2_days'] = float(rec_mu2)
+            if rec_eta is not None:
+                st.session_state['theta_eta'] = float(rec_eta)
+            if rec_nu_days is not None:
+                st.session_state['theta_nu_days'] = float(rec_nu_days)
+            # Force immediate rerun so sidebar shows new values and downstream recomputes
+            try:
+                st.rerun()  # Streamlit >= 1.27
+            except AttributeError:
+                st.experimental_rerun()  # older fallback
 
-    # optional visual confirmation
-    st.success("Suggested thresholds stored in session state. Sidebar now reflects these values.")
+except Exception as _e:
+    st.info(f"Threshold suggestion skipped: {_e}")
 
-    # ✅ force a rerun so widgets rebuild with updated session_state
-    st.rerun()
-
+# ---------------- Download this app (patched) source ----------------
+# (NOT Patch 4; this is a convenience to export the entire app file)
+try:
+    with open(__file__, 'r', encoding='utf-8') as _srcf:
+        _src = _srcf.read()
+    st.download_button(
+        "📦 Download this app (patched) source (.py)",
+        data=_src,
+        file_name="AUTO-THRESH_Conservative20phase_with_simulation_HOTDAYS_patched.py",
+        mime="text/x-python"
+    )
+except Exception as _e_src:
+    st.caption(f"Source download unavailable: {_e_src}")
