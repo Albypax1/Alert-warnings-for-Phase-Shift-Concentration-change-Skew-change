@@ -56,7 +56,7 @@ def logpdf_ssgvm(x, params):
         + np.log(np.maximum(1+eta*np.sin(xw-nu), 1e-12))
         - np.log(Z)
     )
-
+rng_fit = np.random.default_rng(12345)
 def fit_ssgvm_mle_all_starts(data, n_starts=30):
     data = wrap_angle(np.asarray(data))
     def neg_ll(p):
