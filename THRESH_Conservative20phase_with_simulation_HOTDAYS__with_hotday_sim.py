@@ -312,6 +312,27 @@ try:
 
 # Phase angles of baseline hot days in radians, e.g., theta_i = 2π * doy_i / 365
 theta = np.asarray(theta_baseline_rad)
+# --- Patched volatility computation ---
+try:
+    # Use phi_base if available, else fallback
+    if 'phi_base' in globals() and isinstance(phi_base, np.ndarray) and phi_base.size > 0:
+        theta = phi_base
+    else:
+        theta = np.array([])
+    if theta.size > 0:
+        C = np.mean(np.cos(theta)); S = np.mean(np.sin(theta)); R = np.sqrt(C**2 + S**2)
+        s_circ_rad = np.sqrt(2*(1 - R))
+        s_circ_days = s_circ_rad * (365.0 / (2*np.pi))
+    else:
+        s_circ_days = 20.0  # fallback ~3 weeks
+    # Bootstrap SE placeholders
+    se_mu1_boot = s_circ_days
+    se_mu2_boot = s_circ_days
+    w = 0.5
+    sigma_mu1_day = w*se_mu1_boot + (1-w)*s_circ_days
+    sigma_mu2_day = w*se_mu2_boot + (1-w)*s_circ_days
+except Exception as e:
+    sigma_mu1_day = 20.0; sigma_mu2_day = 20.0
 
 # Mean resultant length R
     C = np.mean(np.cos(theta))
