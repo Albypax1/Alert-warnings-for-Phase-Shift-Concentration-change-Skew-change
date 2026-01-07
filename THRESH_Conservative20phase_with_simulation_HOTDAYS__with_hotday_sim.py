@@ -298,28 +298,8 @@ try:
     st.markdown("Stochastic projections for mu1, mu2, k1, k2, eta using phase drift + OU dynamics.")
 
     # Volatility fallbacks (sensitive defaults)
-    #sigma_mu1_day = safe_se(se_base[0], default=0.08) * 0.5 #old volatility
-    #sigma_mu2_day = safe_se(se_base[1], default=0.08) * 0.5
-
-#### New volatility##############################
-# ####Phase angles of baseline hot days in radians, e.g., theta_i = 2π * doy_i / 365
-
-
-### Volatility estimation (safe fallback)
-try:
-    if 'phi_base' in globals() and isinstance(phi_base, np.ndarray) and phi_base.size > 3:
-        C = float(np.mean(np.cos(phi_base))); S = float(np.mean(np.sin(phi_base)))
-        R = float(np.sqrt(C*C + S*S))
-        s_circ_rad = float(np.sqrt(max(0.0, 2*(1 - R))))
-        s_circ_days = s_circ_rad * (365.0 / (2*np.pi))
-    else:
-        s_circ_days = 20.0
-    sigma_mu1_day = s_circ_days
-    sigma_mu2_day = s_circ_days
-except Exception:
-    sigma_mu1_day = 20.0; sigma_mu2_day = 20.0
-
-
+    sigma_mu1_day = safe_se(se_base[0], default=0.08) * 0.5 #old volatility
+    sigma_mu2_day = safe_se(se_base[1], default=0.08) * 0.5
 
 
     
