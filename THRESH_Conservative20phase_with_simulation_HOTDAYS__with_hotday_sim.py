@@ -1,7 +1,7 @@
 
 # -*- coding: utf-8 -*-
 # SS-GvM Monitoring + Simulation — Kimberley (Updated: SE fallbacks, mu2 drift, sensitive thresholds)
-# Author: M365 Copilot | Date: 2026-01-03
+# Author: Albert ANtwi | Date: 2026-01-03
 
 import streamlit as st
 import pandas as pd
@@ -179,7 +179,33 @@ def simulate_eta_ou(eta_base, eta_init, se_eta_base, alpha=0.05, horizon_days=36
     return grid_days, paths
 
 # ---------------- UI ----------------
-st.title("SS-GvM Monitoring + Simulation — Kimberley (Updated)")
+###Background#############################################################
+##########################################################################
+/* Hot Climate Theme */
+body {
+    background: linear-gradient(135deg, #FF6F61, #FFB347, #FFD194);
+    background-size: 400% 400%;
+    animation: heatwave 15s ease infinite;
+    color: #2C2C2C; /* Dark text for contrast */
+    font-family: 'Segoe UI', sans-serif;
+}
+
+@keyframes heatwave {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+}
+
+/* Optional: Dashboard container styling */
+.dashboard-container {
+    background-color: rgba(255, 255, 255, 0.85);
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+####################Title and sidebars ##############################################
+st.title("Heat Risk Monitoring & Forecast Da using advance Statistical and Machine learning Methods")
 
 st.sidebar.header("Configuration")
 baseline_start = st.sidebar.date_input("Baseline start", date(2019,1,1))
@@ -191,15 +217,15 @@ n_starts       = st.sidebar.slider("MLE multi-starts", 10, 60, 30, step=5)
 
 # Alert thresholds (sensitive defaults to help curves move)
 st.sidebar.header("Alert thresholds")
-theta_mu1_days = st.sidebar.number_input("Phase shift threshold mu1 (days)", value=10.0, min_value=0.0)
-theta_mu2_days = st.sidebar.number_input("Phase shift threshold mu2 (days)", value=7.0, min_value=0.0)
-theta_eta      = st.sidebar.number_input("Skew change threshold (eta)", value=0.05, min_value=0.0)
-theta_nu_days  = st.sidebar.number_input("Skew orientation threshold nu (days)", value=10.0, min_value=0.0)
+theta_mu1_days = st.sidebar.number_input("Phase shift threshold mu1 (days)", value=91.6, min_value=0.0)
+theta_mu2_days = st.sidebar.number_input("Phase shift threshold mu2 (days)", value=91.6, min_value=0.0)
+theta_eta      = st.sidebar.number_input("Skew change threshold (eta)", value=0.03, min_value=0.0)
+theta_nu_days  = st.sidebar.number_input("Skew orientation threshold nu (days)", value=6.3, min_value=0.0)
 cl_factor      = st.sidebar.selectbox("Control limit width (SE multiples)", [1.0, 1.5, 2.0, 2.5], index=2)
 
 # Simulation settings
 st.sidebar.header("Simulation settings")
-horizon_days   = st.sidebar.slider("Horizon (days)", 180, 365, 365, step=15)
+horizon_days   = st.sidebar.slider("Horizon (days)", 180, 365, 365, step=7)
 step_days      = st.sidebar.selectbox("Time step (days)", [1, 3, 7, 14, 30], index=2)
 n_paths        = st.sidebar.slider("Monte Carlo paths", 1000, 20000, 5000, step=1000)
 trend_mu       = st.sidebar.slider("Trend continuation (mu1)", 0.0, 1.0, 0.6)
@@ -210,27 +236,28 @@ alpha_eta      = st.sidebar.slider("Mean reversion (eta) OU alpha", 0.00, 0.50, 
 labels = ["mu1","mu2","k1","k2","eta","nu"]
 
 try:
-    # Ingest
+    ################## Ingest##########################################################
     phi_base, df_base = fetch_hotday_phases(str(baseline_start), str(baseline_end), q=quantile_q)
     phi_mon,  df_mon  = fetch_hotday_phases(str(monitor_start),  str(monitor_end),  q=quantile_q)
     st.write(f"Baseline hot-day samples: {len(phi_base)} | Monitoring hot-day samples: {len(phi_mon)}")
 
-    # Fit
+    ################################### Fit ################################
     params_base, ll_base = fit_ssgvm_mle_all_starts(phi_base, n_starts=n_starts)
     params_mon,  ll_mon  = fit_ssgvm_mle_all_starts(phi_mon,  n_starts=n_starts)
 
-    # Baseline SEs
+    ################################ Baseline SEs ###########################
     base_negll = lambda p: -np.sum(logpdf_ssgvm(phi_base, p))
     se_base, cov_base = se_from_hessian(base_negll, params_base)
 
     base_df = pd.DataFrame({"Param": labels, "Baseline": params_base, "SE": se_base})
     mon_df  = pd.DataFrame({"Param": labels, "Monitoring": params_mon})
-    st.markdown("**Baseline parameters (±SE):**")
+    st.markdown("**Estimated baseline parameters:**")
     st.dataframe(base_df)
-    st.markdown("**Monitoring parameters:**")
+    st.markdown("**Estimated monitoring parameters:**")
     st.dataframe(mon_df)
 
     # ---------------- Alerts ----------------
+    ################################################################
     mu1_base, mu1_mon = params_base[0], params_mon[0]
     mu2_base, mu2_mon = params_base[1], params_mon[1]
     k1_base, k2_base  = params_base[2], params_base[3]
@@ -264,7 +291,7 @@ try:
     if delta_nu_days > theta_nu_days:
         alerts.append(f"Skew orientation alert (nu): Delta = {delta_nu_days:.1f} days > theta_nu = {theta_nu_days:.1f}")
 
-    st.subheader("Alerts")
+    st.subheader("Alerts for parameter changes based on the defined thresholds")
     if alerts:
         for a in alerts:
             st.error(a)
@@ -289,17 +316,47 @@ try:
     ax.plot(days, dens_base, label="Baseline", color="steelblue", lw=2)
     ax.plot(days, dens_mon,  label="Monitoring", color="crimson",  lw=2)
     ax.set_xlabel("Day of Year"); ax.set_ylabel("Probability density")
-    ax.set_title("SS-GvM density: baseline vs monitoring")
+    ax.set_title("Probability density of GHS-vM model: baseline vs monitoring")
     ax.legend(); ax.grid(alpha=0.3)
     st.pyplot(fig)
 
     # ---------------- Simulation ----------------
-    st.subheader("Multi-parameter simulation (next year)")
+    st.subheader("Multi-parameter simulation for a year ahead)")
     st.markdown("Stochastic projections for mu1, mu2, k1, k2, eta using phase drift + OU dynamics.")
 
     # Volatility fallbacks (sensitive defaults)
-    sigma_mu1_day = safe_se(se_base[0], default=0.08) * 0.5
-    sigma_mu2_day = safe_se(se_base[1], default=0.08) * 0.5
+    #sigma_mu1_day = safe_se(se_base[0], default=0.08) * 0.5 " old values
+    #sigma_mu2_day = safe_se(se_base[1], default=0.08) * 0.5
+
+################ Resampled volatioty##################################################
+
+
+# Phase angles of baseline hot days in radians, e.g., theta_i = 2π * doy_i / 365
+theta = np.asarray(theta_baseline_rad)
+
+# Mean resultant length R
+    C = np.mean(np.cos(theta))
+    S = np.mean(np.sin(theta))
+    R = np.sqrt(C**2 + S**2)
+
+# Circular SD in radians → days
+    s_circ_rad = np.sqrt(2*(1 - R))                                 # Fisher (1995); Circular Stats in R
+    s_circ_days = s_circ_rad * (365.0 / (2*np.pi))
+
+# Bootstrap SEs for OU diffusion on μ1, μ2 (from residuals)
+se_mu1_boot = ou_sigma_bootstrap(mu1_series)                     # returns σ_SE in days
+se_mu2_boot = ou_sigma_bootstrap(mu2_series)
+
+# Suggested σ for simulation: blend circular spread with bootstrap precision
+    w = 0.5  # weight towards bootstrap precision; adjust 0.3–0.7 based on sample length
+    sigma_mu1_day = w*se_mu1_boot + (1-w)*s_circ_days
+    sigma_mu2_day = w*se_mu2_boot + (1-w)*s_circ_days
+
+# If von Mises fitted to phase: use kappa to set σ as cross-check
+# var_theta_rad ≈ 1/kappa  (moderate κ); sigma_vm_days = sqrt(var_theta_rad) * 365/(2π)
+
+#########################################################################
+    
 
     grid_days, paths_mu1 = simulate_angles(mu1_base, mu1_mon, trend_mu,  sigma_mu1_day, horizon_days, step_days, n_paths, seed=42)
     _,         paths_mu2 = simulate_angles(mu2_base, mu2_mon, trend_mu2, sigma_mu2_day, horizon_days, step_days, n_paths, seed=43)
@@ -664,7 +721,7 @@ st.header("Stochastic hot‑day simulator (Hybrid SS‑GvM + ML + Monte Carlo)")
 
 # Sidebar controls for horizon and simulation
 st.sidebar.header("Hot‑day simulation (7 days ↔ 3 months)")
-hot_horizon = st.sidebar.slider("Hot‑day forecast horizon (days)", 7, 90, 7, step=1)
+hot_horizon = st.sidebar.slider("Hot‑day forecast horizon (days)", 1, 90, 7, step=1)
 hot_nsims   = st.sidebar.slider("Monte Carlo simulations", 500, 10000, 3000, step=500)
 hot_blend_w = st.sidebar.slider("Blend weight: SS‑GvM vs ML/climatology", 0.0, 1.0, 0.5)
 hot_model   = st.sidebar.selectbox("ML model (if available)", ["GradientBoosting", "RandomForest"]) 
