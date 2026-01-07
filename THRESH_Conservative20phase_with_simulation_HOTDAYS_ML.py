@@ -285,7 +285,7 @@ def simulate_scalar_ou_ml(mean_monthly, sigma_monthly, init_val, transform: str,
 # --------------------------- UI ---------------------------
 st.title("SS-GvM Monitoring + Simulation — Kimberley (ML-enhanced)")
 st.sidebar.header("Configuration")
-baseline_start = st.sidebar.date_input("Baseline start", date(2019,1,1))
+baseline_start = st.sidebar.date_input("Baseline start", date(2009,1,1))
 baseline_end   = st.sidebar.date_input("Baseline end",   date(2023,12,31))
 monitor_start  = st.sidebar.date_input("Monitor start",  date(2024,1,1))
 monitor_end    = st.sidebar.date_input("Monitor end",    date.today())
@@ -297,10 +297,10 @@ ML_RANDOM_STATE = st.sidebar.number_input("ML random_state", value=ML_RANDOM_STA
 RNG_SEED        = st.sidebar.number_input("Monte Carlo RNG seed", value=RNG_SEED_DEFAULT, step=1)
 
 st.sidebar.header("Alert thresholds")
-theta_mu1_days = st.sidebar.number_input("Phase shift threshold mu1 (days)", value=10.0, min_value=0.0)
-theta_mu2_days = st.sidebar.number_input("Phase shift threshold mu2 (days)", value=7.0,  min_value=0.0)
-theta_eta      = st.sidebar.number_input("Skew change threshold (eta)",     value=0.05, min_value=0.0)
-theta_nu_days  = st.sidebar.number_input("Skew orientation threshold nu (days)", value=10.0, min_value=0.0)
+theta_mu1_days = st.sidebar.number_input("Phase shift threshold mu1 (days)", value=91.6, min_value=0.0)
+theta_mu2_days = st.sidebar.number_input("Phase shift threshold mu2 (days)", value=91.6,  min_value=0.0)
+theta_eta      = st.sidebar.number_input("Skew change threshold (eta)",     value=0.03, min_value=0.0)
+theta_nu_days  = st.sidebar.number_input("Skew orientation threshold nu (days)", value=6.3, min_value=0.0)
 cl_factor      = st.sidebar.selectbox("Control limit width (SE multiples)", [1.0, 1.5, 2.0, 2.5], index=2)
 
 st.sidebar.header("Simulation settings")
