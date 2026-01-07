@@ -302,18 +302,18 @@ try:
     #sigma_mu2_day = safe_se(se_base[1], default=0.08) * 0.5
 
     
-
+   
 # --- Volatility (data-driven; no ad-hoc multipliers) ---
 # Use baseline hot-day phase circular dispersion for angle diffusion;
 # fall back to SEs from the Hessian when needed.
 
 # 1) Circular SD of baseline hot-day phases (radians), using existing helper
 if 'phi_base' in globals() and isinstance(phi_base, np.ndarray) and phi_base.size > 0:
-    R, s_rad = _circular_stats(np.asarray(phi_base))
+    R, s_rad = _circular_stats(np.asarray(phi_base))   # returns (R, circular_sd_in_radians)
 else:
     R, s_rad = (np.nan, 0.08)  # conservative fallback if phases unavailable
 
-# Diffusion scale per day for angle (used inside simulate_angles via sqrt(dt))
+# Diffusion scale per day for angle; simulate_angles uses sqrt(dt) internally
 # This sets the annual random-walk SD ~ s_rad
 sigma_mu1_day = max(1e-6, (safe_se(se_base[0], default=s_rad) / np.sqrt(365.0)))
 sigma_mu2_day = max(1e-6, (safe_se(se_base[1], default=s_rad) / np.sqrt(365.0)))
@@ -324,6 +324,7 @@ sigma_k2_log = max(1e-6, safe_se(se_base[3]) / max(params_base[3], 1e-6))
 
 # 3) Skew parameter eta (tanh-transform OU): set volatility from SE (no multiplier)
 sigma_eta_y = max(1e-6, safe_se(se_base[4], default=0.10))
+
 
 
 
