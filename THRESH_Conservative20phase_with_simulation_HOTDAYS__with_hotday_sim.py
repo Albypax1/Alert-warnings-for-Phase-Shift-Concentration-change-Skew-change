@@ -182,21 +182,6 @@ def simulate_eta_ou(eta_base, eta_init, se_eta_base, alpha=0.05, horizon_days=36
 ###Background#############################################################
 ##########################################################################
 
-from dash import Dash, html
-
-app = Dash(__name__)  # Will auto-load assets/style.css
-
-app.layout = html.Div(
-    className="dashboard-container",
-    children=[
-        html.H2("SS‑GvM Monitoring + Simulation — Kimberley"),
-        # ... your graphs/tables ...
-    ]
-)
-
-if __name__ == "__main__":
-    app.run_server(debug=True)
-
 
 ####################Title and sidebars ##############################################
 st.title("Heat Risk Monitoring & Forecast Da using advance Statistical and Machine learning Methods")
