@@ -3,11 +3,6 @@
 # SS-GvM Monitoring + Simulation — Kimberley (ML-enhanced: Option A)
 # Author: M365 Copilot
 # Date: 2026-01-07
-# Notes:
-# - Adds in-app ML training (Gradient Boosting) to produce time-varying monthly drifts
-#   and calibrated uncertainty for mu1, mu2, k1, k2, eta. Hybridized with OU noise.
-# - Deterministic behavior via fixed seeds: ML_RANDOM_STATE and RNG_SEED.
-# - Keeps original OU-only simulation as fallback if ML training cannot proceed.
 
 import streamlit as st
 import pandas as pd
@@ -16,39 +11,29 @@ import matplotlib.pyplot as plt
 from datetime import date, datetime, timedelta
 from scipy import optimize
 import requests
-
-# ML imports (scikit-learn)
 from sklearn.ensemble import GradientBoostingRegressor
 
-# --------------------------- constants & utils ---------------------------
 TWO_PI = 2*np.pi
-LAT, LON = -28.7419, 24.7719  # Kimberley
+LAT, LON = -28.7419, 24.7719
 TIMEZONE = "Africa/Johannesburg"
 ML_RANDOM_STATE_DEFAULT = 20260107
 RNG_SEED_DEFAULT = 20260107
 
-# Helpers
-
-def wrap_angle(x):
-    return np.mod(x, TWO_PI)
+def wrap_angle(x): return np.mod(x, TWO_PI)
 
 def circ_diff(a, b):
     d = np.abs(a - b)
     return np.minimum(d, TWO_PI - d)
 
-def angle_to_days(angle):
-    return (angle / TWO_PI) * 365.0
+def angle_to_days(angle): return (angle / TWO_PI) * 365.0
 
 def safe_se(x, default=0.08):
     try:
         xv = float(x)
-        if not np.isfinite(xv) or xv <= 0:
-            return float(default)
+        if not np.isfinite(xv) or xv <= 0: return float(default)
         return xv
     except Exception:
         return float(default)
-
-# --------------------------- SS-GvM core ---------------------------
 
 def normalizer_ssgvm(mu1, mu2, k1, k2, eta, nu, n_grid=4096):
     grid = np.linspace(0, TWO_PI, n_grid, endpoint=False)
@@ -85,17 +70,12 @@ def fit_ssgvm_mle_all_starts(data, n_starts=30):
             np.tanh(np.random.randn()), np.random.rand()*TWO_PI
         ])
         res = optimize.minimize(neg_ll, init, method="L-BFGS-B", bounds=bounds, options={"maxiter": 6000})
-        if res.fun < best['fun']:
-            best = res
+        if res.fun < best['fun']: best = res
     return best.x, -best.fun
 
-# --------------------------- Hessian & SE ---------------------------
-
 def numerical_hessian(func, x, eps_rel=1e-4, eps_abs=1e-6):
-    x = np.asarray(x, dtype=float)
-    n = x.size
-    H = np.zeros((n, n))
-    f0 = func(x)
+    x = np.asarray(x, dtype=float); n = x.size
+    H = np.zeros((n, n)); f0 = func(x)
     for i in range(n):
         h_i = eps_abs + eps_rel * max(1.0, abs(x[i]))
         x_i_plus = x.copy(); x_i_plus[i] += h_i
@@ -122,8 +102,6 @@ def se_from_hessian(neg_ll_func, params):
     except Exception:
         return np.full(len(params), np.nan), np.full((len(params), len(params)), np.nan)
 
-# --------------------------- Data ingestion (Open-Meteo) ---------------------------
-
 @st.cache_data(show_spinner=False)
 def fetch_hotday_phases(start_date: str, end_date: str, q=0.90):
     url = "https://archive-api.open-meteo.com/v1/archive"
@@ -137,8 +115,8 @@ def fetch_hotday_phases(start_date: str, end_date: str, q=0.90):
     r.raise_for_status()
     data = r.json()["daily"]
     df = pd.DataFrame({"date": data["time"], "tmax": data["temperature_2m_max"]})
-    df["date"] = pd.to_datetime(df["date"])
-    df["doy"] = df["date"].dt.dayofyear
+    df["date"] = pd.to_datetime(df["date"]) 
+    df["doy"]  = df["date"].dt.dayofyear
     thr = np.quantile(df["tmax"].dropna(), q)
     hot = df[df["tmax"] >= thr]
     phi = TWO_PI * (hot["doy"].values - 1) / 365.0
@@ -157,8 +135,7 @@ def build_monthly_param_series(df_daily: pd.DataFrame, q=0.90, min_samples: int 
     for ym, dfg in df.groupby("ym"):
         hot = dfg[dfg["tmax"] >= thr]
         n = len(hot)
-        if n < min_samples:
-            continue
+        if n < min_samples: continue
         phi = TWO_PI * (hot["doy"].values - 1) / 365.0
         try:
             params, _ = fit_ssgvm_mle_all_starts(phi, n_starts=n_starts)
@@ -173,100 +150,72 @@ def build_monthly_param_series(df_daily: pd.DataFrame, q=0.90, min_samples: int 
             continue
     return pd.DataFrame(rows).sort_values("month_start").reset_index(drop=True)
 
-# --------------------------- ML preparation ---------------------------
-
 def add_seasonal_features(dfm: pd.DataFrame):
-    df = dfm.copy()
-    df["month"] = df["month_start"].dt.month
+    df = dfm.copy(); df["month"] = df["month_start"].dt.month
     ang = 2*np.pi*(df["month"]-1)/12.0
-    df["m_sin"] = np.sin(ang)
-    df["m_cos"] = np.cos(ang)
+    df["m_sin"], df["m_cos"] = np.sin(ang), np.cos(ang)
     return df
-
 
 def make_lagged(dfm: pd.DataFrame, L: int = 6):
     df = dfm.copy()
     for col in ["mu1","mu2","k1","k2","eta","nu","hot_n"]:
-        for l in range(1, L+1):
-            df[f"{col}_lag{l}"] = df[col].shift(l)
+        for l in range(1, L+1): df[f"{col}_lag{l}"] = df[col].shift(l)
     df = add_seasonal_features(df)
-    df = df.dropna().reset_index(drop=True)
-    return df
-
+    return df.dropna().reset_index(drop=True)
 
 def fit_angle_models(df_lagged: pd.DataFrame, target_col: str, random_state: int):
     y = df_lagged[target_col].values
-    y_sin = np.sin(y); y_cos = np.cos(y)
-    feature_cols = [c for c in df_lagged.columns if c.startswith("mu1_") or c.startswith("mu2_")
-                    or c.startswith("k1_") or c.startswith("k2_") or c.startswith("eta_")
-                    or c.startswith("nu_") or c.startswith("hot_n_") or c in ["m_sin","m_cos"]]
+    y_sin, y_cos = np.sin(y), np.cos(y)
+    feature_cols = [c for c in df_lagged.columns if (
+        c.startswith("mu1_") or c.startswith("mu2_") or c.startswith("k1_") or
+        c.startswith("k2_") or c.startswith("eta_") or c.startswith("nu_") or
+        c.startswith("hot_n_") or c in ["m_sin","m_cos"])]
     X = df_lagged[feature_cols].values
     gbr_sin = GradientBoostingRegressor(loss="squared_error", random_state=random_state)
     gbr_cos = GradientBoostingRegressor(loss="squared_error", random_state=random_state)
     gbr_sin.fit(X, y_sin); gbr_cos.fit(X, y_cos)
-    y_sin_pred = gbr_sin.predict(X); y_cos_pred = gbr_cos.predict(X)
-    ang_pred = np.arctan2(y_sin_pred, y_cos_pred)
+    ang_pred = np.arctan2(gbr_sin.predict(X), gbr_cos.predict(X))
     res = circ_diff(ang_pred, y)
     sigma_ang = float(np.median(res)) if np.isfinite(np.median(res)) else 0.08
     if sigma_ang <= 0: sigma_ang = 0.08
-    return {
-        "feature_cols": feature_cols,
-        "sin_model": gbr_sin,
-        "cos_model": gbr_cos,
-        "sigma": sigma_ang
-    }
-
+    return {"feature_cols": feature_cols, "sin_model": gbr_sin, "cos_model": gbr_cos, "sigma": sigma_ang}
 
 def fit_scalar_models(df_lagged: pd.DataFrame, target_col: str, random_state: int):
-    feature_cols = [c for c in df_lagged.columns if c.startswith("mu1_") or c.startswith("mu2_")
-                    or c.startswith("k1_") or c.startswith("k2_") or c.startswith("eta_")
-                    or c.startswith("nu_") or c.startswith("hot_n_") or c in ["m_sin","m_cos"]]
-    X = df_lagged[feature_cols].values
-    y = df_lagged[target_col].values
+    feature_cols = [c for c in df_lagged.columns if (
+        c.startswith("mu1_") or c.startswith("mu2_") or c.startswith("k1_") or
+        c.startswith("k2_") or c.startswith("eta_") or c.startswith("nu_") or
+        c.startswith("hot_n_") or c in ["m_sin","m_cos"])]
+    X = df_lagged[feature_cols].values; y = df_lagged[target_col].values
     gbr_med = GradientBoostingRegressor(loss="quantile", alpha=0.5, random_state=random_state)
     gbr_lo  = GradientBoostingRegressor(loss="quantile", alpha=0.1, random_state=random_state)
     gbr_hi  = GradientBoostingRegressor(loss="quantile", alpha=0.9, random_state=random_state)
     gbr_med.fit(X, y); gbr_lo.fit(X, y); gbr_hi.fit(X, y)
-    y_lo = gbr_lo.predict(X); y_hi = gbr_hi.predict(X)
-    spread = np.median(np.maximum(y_hi - y_lo, 1e-9))
-    sigma = float(spread / 2.563)
+    spread = np.median(np.maximum(gbr_hi.predict(X) - gbr_lo.predict(X), 1e-9))
+    sigma = float(spread / 2.563) if np.isfinite(spread) else 0.10
     if not np.isfinite(sigma) or sigma <= 0:
         sigma = float(np.std(y - gbr_med.predict(X))) if X.shape[0] else 0.10
     if not np.isfinite(sigma) or sigma <= 0: sigma = 0.10
-    return {
-        "feature_cols": feature_cols,
-        "med_model": gbr_med,
-        "lo_model": gbr_lo,
-        "hi_model": gbr_hi,
-        "sigma": sigma
-    }
+    return {"feature_cols": feature_cols, "med_model": gbr_med, "lo_model": gbr_lo, "hi_model": gbr_hi, "sigma": sigma}
 
 @st.cache_data(show_spinner=True)
 def fit_ml_all(df_monthly: pd.DataFrame, random_state: int):
     df_lagged = make_lagged(df_monthly, L=6)
-    if df_lagged.empty:
-        return None
+    if df_lagged.empty: return None
     models = {}
-    for tcol in ["mu1","mu2","nu"]:
-        models[tcol] = fit_angle_models(df_lagged, tcol, random_state=random_state)
-    for tcol in ["k1","k2","eta"]:
-        models[tcol] = fit_scalar_models(df_lagged, tcol, random_state=random_state)
+    for tcol in ["mu1","mu2","nu"]: models[tcol] = fit_angle_models(df_lagged, tcol, random_state=random_state)
+    for tcol in ["k1","k2","eta"]: models[tcol] = fit_scalar_models(df_lagged, tcol, random_state=random_state)
     models["df_lagged"] = df_lagged
     return models
-
 
 def forecast_next_month(x_row: pd.Series, models: dict):
     res = {}
     for tcol in ["mu1","mu2","nu"]:
-        m = models[tcol]
-        X = x_row[m["feature_cols"]].values.reshape(1,-1)
-        sin_pred = m["sin_model"].predict(X)[0]
-        cos_pred = m["cos_model"].predict(X)[0]
+        m = models[tcol]; X = x_row[m["feature_cols"]].values.reshape(1,-1)
+        sin_pred = m["sin_model"].predict(X)[0]; cos_pred = m["cos_model"].predict(X)[0]
         ang = float(np.arctan2(sin_pred, cos_pred))
         res[tcol] = {"mean": wrap_angle(ang), "sigma": float(m["sigma"]) }
     for tcol in ["k1","k2","eta"]:
-        m = models[tcol]
-        X = x_row[m["feature_cols"]].values.reshape(1,-1)
+        m = models[tcol]; X = x_row[m["feature_cols"]].values.reshape(1,-1)
         med = float(m["med_model"].predict(X)[0])
         lo  = float(m["lo_model"].predict(X)[0])
         hi  = float(m["hi_model"].predict(X)[0])
@@ -277,65 +226,45 @@ def forecast_next_month(x_row: pd.Series, models: dict):
         res[tcol] = {"mean": med, "q10": lo, "q90": hi, "sigma": float(m["sigma"]) }
     return res
 
-
 def recursive_forecast_12(df_monthly: pd.DataFrame, models: dict):
-    df_hist = df_monthly.copy()
-    out_rows = []
+    df_hist = df_monthly.copy(); out_rows = []
     df_lagged = make_lagged(df_hist, L=6)
-    if df_lagged.empty:
-        return pd.DataFrame()
-    last = df_lagged.iloc[-1].copy()
-    current_month = df_hist["month_start"].iloc[-1]
+    if df_lagged.empty: return pd.DataFrame()
+    last = df_lagged.iloc[-1].copy(); current_month = df_hist["month_start"].iloc[-1]
     for h in range(1, 13):
         fc = forecast_next_month(last, models)
         next_month = (current_month + pd.offsets.MonthBegin(1))
         out_rows.append({
             "month_start": next_month,
-            "mu1_mean": fc["mu1"]["mean"],
-            "mu2_mean": fc["mu2"]["mean"],
-            "nu_mean":  fc["nu"]["mean"],
-            "mu1_sigma": fc["mu1"]["sigma"],
-            "mu2_sigma": fc["mu2"]["sigma"],
-            "nu_sigma":  fc["nu"]["sigma"],
+            "mu1_mean": fc["mu1"]["mean"], "mu2_mean": fc["mu2"]["mean"], "nu_mean": fc["nu"]["mean"],
+            "mu1_sigma": fc["mu1"]["sigma"], "mu2_sigma": fc["mu2"]["sigma"], "nu_sigma": fc["nu"]["sigma"],
             "k1_mean": fc["k1"]["mean"], "k1_q10": fc["k1"]["q10"], "k1_q90": fc["k1"]["q90"], "k1_sigma": fc["k1"]["sigma"],
             "k2_mean": fc["k2"]["mean"], "k2_q10": fc["k2"]["q10"], "k2_q90": fc["k2"]["q90"], "k2_sigma": fc["k2"]["sigma"],
-            "eta_mean": fc["eta"]["mean"], "eta_q10": fc["eta"]["q10"], "eta_q90": fc["eta"]["q90"], "eta_sigma": fc["eta"]["sigma"],
+            "eta_mean": fc["eta"]["mean"], "eta_q10": fc["eta"]["q10"], "eta_q90": fc["eta"]["q90"], "eta_sigma": fc["eta"]["sigma"]
         })
         for col in ["mu1","mu2","k1","k2","eta","nu","hot_n"]:
-            for L in range(6,1,-1):
-                last[f"{col}_lag{L}"] = last.get(f"{col}_lag{L-1}", np.nan)
-        last["mu1_lag1"] = out_rows[-1]["mu1_mean"]
-        last["mu2_lag1"] = out_rows[-1]["mu2_mean"]
-        last["nu_lag1"]  = out_rows[-1]["nu_mean"]
-        last["k1_lag1"]  = out_rows[-1]["k1_mean"]
-        last["k2_lag1"]  = out_rows[-1]["k2_mean"]
-        last["eta_lag1"] = out_rows[-1]["eta_mean"]
+            for L in range(6,1,-1): last[f"{col}_lag{L}"] = last.get(f"{col}_lag{L-1}", np.nan)
+        last["mu1_lag1"], last["mu2_lag1"], last["nu_lag1"] = out_rows[-1]["mu1_mean"], out_rows[-1]["mu2_mean"], out_rows[-1]["nu_mean"]
+        last["k1_lag1"],  last["k2_lag1"],  last["eta_lag1"] = out_rows[-1]["k1_mean"], out_rows[-1]["k2_mean"], out_rows[-1]["eta_mean"]
         last["hot_n_lag1"] = last.get("hot_n_lag1", 30)
-        m = int((next_month.month))
-        ang = 2*np.pi*(m-1)/12.0
-        last["m_sin"] = np.sin(ang); last["m_cos"] = np.cos(ang)
+        m = int(next_month.month); ang = 2*np.pi*(m-1)/12.0
+        last["m_sin"], last["m_cos"] = np.sin(ang), np.cos(ang)
         current_month = next_month
     return pd.DataFrame(out_rows)
 
-# --------------------------- Simulators (ML hybrid, monthly) ---------------------------
-
 def simulate_angles_ml(mean_monthly, sigma_monthly, mu_base, step_days, n_paths, rng_seed):
     rng = np.random.default_rng(rng_seed)
-    n_months = len(mean_monthly)
-    grid_days = np.arange(1, n_months+1) * int(round(30.4))
+    n_months = len(mean_monthly); grid_days = np.arange(1, n_months+1) * int(round(30.4))
     paths = np.empty((n_paths, n_months), dtype=float)
     for t in range(n_months):
-        mu_mean = mean_monthly[t]; sigma = sigma_monthly[t]
-        noise = rng.normal(0.0, sigma, size=n_paths)
-        mu_sim = wrap_angle(mu_mean + noise)
+        noise = rng.normal(0.0, sigma_monthly[t], size=n_paths)
+        mu_sim = wrap_angle(mean_monthly[t] + noise)
         paths[:, t] = angle_to_days(circ_diff(mu_sim, mu_base))
     return grid_days, paths
 
-
 def simulate_scalar_ou_ml(mean_monthly, sigma_monthly, init_val, transform: str, step_days, n_paths, rng_seed):
     rng = np.random.default_rng(rng_seed)
-    n_months = len(mean_monthly)
-    grid_days = np.arange(1, n_months+1) * int(round(30.4))
+    n_months = len(mean_monthly); grid_days = np.arange(1, n_months+1) * int(round(30.4))
     paths = np.empty((n_paths, n_months), dtype=float)
     def fwd(x):
         if transform == "log":   return np.log(np.maximum(x, 1e-6))
@@ -354,7 +283,6 @@ def simulate_scalar_ou_ml(mean_monthly, sigma_monthly, init_val, transform: str,
     return grid_days, paths
 
 # --------------------------- UI ---------------------------
-
 st.title("SS-GvM Monitoring + Simulation — Kimberley (ML-enhanced)")
 st.sidebar.header("Configuration")
 baseline_start = st.sidebar.date_input("Baseline start", date(2019,1,1))
@@ -364,12 +292,10 @@ monitor_end    = st.sidebar.date_input("Monitor end",    date.today())
 quantile_q     = st.sidebar.slider("Hot-day threshold quantile", 0.80, 0.99, 0.90)
 n_starts       = st.sidebar.slider("MLE multi-starts", 10, 60, 30, step=5)
 
-# Fixed seeds for reproducibility
 st.sidebar.header("Reproducibility")
 ML_RANDOM_STATE = st.sidebar.number_input("ML random_state", value=ML_RANDOM_STATE_DEFAULT, step=1)
 RNG_SEED        = st.sidebar.number_input("Monte Carlo RNG seed", value=RNG_SEED_DEFAULT, step=1)
 
-# Alert thresholds
 st.sidebar.header("Alert thresholds")
 theta_mu1_days = st.sidebar.number_input("Phase shift threshold mu1 (days)", value=10.0, min_value=0.0)
 theta_mu2_days = st.sidebar.number_input("Phase shift threshold mu2 (days)", value=7.0,  min_value=0.0)
@@ -377,7 +303,6 @@ theta_eta      = st.sidebar.number_input("Skew change threshold (eta)",     valu
 theta_nu_days  = st.sidebar.number_input("Skew orientation threshold nu (days)", value=10.0, min_value=0.0)
 cl_factor      = st.sidebar.selectbox("Control limit width (SE multiples)", [1.0, 1.5, 2.0, 2.5], index=2)
 
-# Simulation settings
 st.sidebar.header("Simulation settings")
 step_days    = st.sidebar.selectbox("Time step (days)", [7, 14, 30], index=0)
 n_paths      = st.sidebar.slider("Monte Carlo paths", 1000, 20000, 5000, step=1000)
@@ -385,11 +310,10 @@ n_paths      = st.sidebar.slider("Monte Carlo paths", 1000, 20000, 5000, step=10
 labels = ["mu1","mu2","k1","k2","eta","nu"]
 
 try:
-    # Ingest & fits
     phi_base, df_base = fetch_hotday_phases(str(baseline_start), str(baseline_end), q=quantile_q)
     phi_mon,  df_mon  = fetch_hotday_phases(str(monitor_start),  str(monitor_end),  q=quantile_q)
-    st.write(f"Baseline hot-day samples: {len(phi_base)}  
-Monitoring hot-day samples: {len(phi_mon)}")
+    # FIXED: avoid unterminated f-string by keeping it on one line
+    st.write(f"Baseline hot-day samples: {len(phi_base)}  \nMonitoring hot-day samples: {len(phi_mon)}")
 
     params_base, ll_base = fit_ssgvm_mle_all_starts(phi_base, n_starts=n_starts)
     params_mon,  ll_mon  = fit_ssgvm_mle_all_starts(phi_mon,  n_starts=n_starts)
@@ -401,7 +325,6 @@ Monitoring hot-day samples: {len(phi_mon)}")
     st.markdown("**Baseline parameters (±SE):**"); st.dataframe(base_df)
     st.markdown("**Monitoring parameters:**");     st.dataframe(mon_df)
 
-    # Alerts
     mu1_base, mu1_mon = params_base[0], params_mon[0]
     mu2_base, mu2_mon = params_base[1], params_mon[1]
     k1_base,  k2_base = params_base[2], params_base[3]
@@ -440,7 +363,6 @@ Monitoring hot-day samples: {len(phi_mon)}")
     else:
         st.success("No alerts triggered under current thresholds.")
 
-    # Density
     st.subheader("Baseline vs Monitoring density")
     days = np.arange(1, 366); theta_grid = 2*np.pi*days/365.0
     def ssgvm_density(params, theta):
@@ -457,20 +379,16 @@ Monitoring hot-day samples: {len(phi_mon)}")
     ax.set_title("SS-GvM density: baseline vs monitoring")
     ax.legend(); ax.grid(alpha=0.3); st.pyplot(fig)
 
-    # --------------------- ML training & forecast ---------------------
     st.subheader("ML-based monthly drift & uncertainty (Option A)")
     with st.spinner("Estimating monthly SS-GvM parameters and training ML models..."):
         df_all = pd.concat([df_base, df_mon], axis=0).sort_values("date").reset_index(drop=True)
         df_all = df_all[(df_all["date"].dt.date >= baseline_start) & (df_all["date"].dt.date <= monitor_end)]
         df_monthly = build_monthly_param_series(df_all, q=quantile_q, min_samples=20, n_starts=max(10, n_starts//2))
-        if df_monthly.empty or len(df_monthly) < 24:
+        ml_models = fit_ml_all(df_monthly, random_state=int(ML_RANDOM_STATE)) if (not df_monthly.empty and len(df_monthly) >= 24) else None
+        if ml_models is None:
             st.warning("Insufficient monthly samples for ML. Falling back to OU-only simulation.")
-            ml_models = None
-        else:
-            ml_models = fit_ml_all(df_monthly, random_state=int(ML_RANDOM_STATE))
 
     if ml_models is None:
-        st.info("ML not available; using OU-only mechanics for projections.")
         grid_days, paths_mu1 = simulate_angles_ml([params_mon[0]]*12, [safe_se(se_base[0],0.08)]*12, params_base[0], step_days, n_paths, int(RNG_SEED)+1)
         _,         paths_mu2 = simulate_angles_ml([params_mon[1]]*12, [safe_se(se_base[1],0.08)]*12, params_base[1], step_days, n_paths, int(RNG_SEED)+2)
         grid_days_k1, paths_k1 = simulate_scalar_ou_ml([params_mon[2]]*12, [safe_se(se_base[2],0.10)]*12, params_mon[2], "log",   step_days, n_paths, int(RNG_SEED)+3)
@@ -488,7 +406,6 @@ Monitoring hot-day samples: {len(phi_mon)}")
         grid_days_eta, paths_eta = simulate_scalar_ou_ml(fc12["eta_mean"].tolist(), fc12["eta_sigma"].tolist(), params_mon[4], "atanh", step_days, n_paths, int(RNG_SEED)+15)
         source = "ML + OU"
 
-    # Probabilities (monthly resolution)
     prob_mu1 = (paths_mu1 > theta_mu1_days).mean(axis=0)
     prob_mu2 = (paths_mu2 > theta_mu2_days).mean(axis=0)
     prob_k1  = ((paths_k1 > k1_upper) | (paths_k1 < k1_lower)).mean(axis=0)
@@ -520,8 +437,7 @@ Monitoring hot-day samples: {len(phi_mon)}")
     axpr.set_ylim(0,1); axpr.set_xlabel("Days ahead (monthly anchors)"); axpr.set_ylabel("Probability")
     axpr.grid(alpha=0.3); axpr.legend(ncol=2); st.pyplot(fig_prob)
 
-    horizons = [90,180,270,360]
-    rows = []
+    horizons = [90,180,270,360]; rows = []
     for H in horizons:
         idx = min(np.searchsorted(grid_days, H), len(grid_days)-1)
         rows.append({
@@ -533,26 +449,18 @@ Monitoring hot-day samples: {len(phi_mon)}")
             "mu2_Med": np.percentile(paths_mu2[:, idx], 50),
             "mu2_P95": np.percentile(paths_mu2[:, idx], 95),
             f"P(Δ mu1 > {theta_mu1_days:.1f}d)": prob_mu1[idx],
-            f"P(Δ mu2 > {theta_mu2_days:.1f}d)": prob_mu2[idx],
+            f"P(Δ mu2 > {theta_mu2_days:.1f}d)": prob_mu2[idx]
         })
     quarterly = pd.DataFrame(rows)
-    st.download_button("Download monthly probabilities (CSV)",
-                       data=monthly_summary.to_csv(index=False).encode("utf-8"),
-                       file_name="monthly_forward_risk_probabilities_ML.csv", mime="text/csv")
-    st.download_button("Download quarterly percentiles & probs (CSV)",
-                       data=quarterly.to_csv(index=False).encode("utf-8"),
-                       file_name="quarterly_simulation_summary_ML.csv", mime="text/csv")
+    st.download_button("Download monthly probabilities (CSV)", data=monthly_summary.to_csv(index=False).encode("utf-8"), file_name="monthly_forward_risk_probabilities_ML.csv", mime="text/csv")
+    st.download_button("Download quarterly percentiles & probs (CSV)", data=quarterly.to_csv(index=False).encode("utf-8"), file_name="quarterly_simulation_summary_ML.csv", mime="text/csv")
 
     report = pd.concat([
         pd.DataFrame({"Param": labels, "Baseline": params_base, "Baseline_SE": se_base}),
         pd.DataFrame({"Param": labels, "Monitoring": params_mon})
     ], axis=1)
-    st.download_button("Download parameter report (CSV)",
-                       data=report.to_csv(index=False).encode("utf-8"),
-                       file_name="kimberley_ssgvm_parameter_monitoring_ML.csv", mime="text/csv")
+    st.download_button("Download parameter report (CSV)", data=report.to_csv(index=False).encode("utf-8"), file_name="kimberley_ssgvm_parameter_monitoring_ML.csv", mime="text/csv")
 
 except Exception as e:
     st.error(f"Data, fitting, or simulation failed: {e}")
     st.info("Tip: Ensure sufficient hot-day samples, adjust quantile or windows, and verify network access.")
-
-# NOTE: Hot Days Benchmarking add-on from your original file can be appended below if needed.
