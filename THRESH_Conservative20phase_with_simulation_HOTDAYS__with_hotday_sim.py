@@ -298,8 +298,21 @@ try:
     st.markdown("Stochastic projections for mu1, mu2, k1, k2, eta using phase drift + OU dynamics.")
 
     # Volatility fallbacks (sensitive defaults)
-    sigma_mu1_day = safe_se(se_base[0], default=0.08) * 0.5 #old volatility
-    sigma_mu2_day = safe_se(se_base[1], default=0.08) * 0.5
+    #sigma_mu1_day = safe_se(se_base[0], default=0.08) * 0.5 #old volatility
+    #sigma_mu2_day = safe_se(se_base[1], default=0.08) * 0.5
+
+    
+# --- Compute circular SD of baseline hot-day phases (radians)
+R = np.sqrt(np.mean(np.cos(phi_base))**2 + np.mean(np.sin(phi_base))**2)
+s_rad = np.sqrt(max(0.0, -2.0*np.log(max(R, 1e-12))))   # Fisher (circular SD)
+
+# Convert to per-day diffusion for angle; assume random-walk on circle with mean reversion via 'trend_mu'
+# Scale by step_days inside simulate_angles via √dt, so set a base sigma-per-day:
+sigma_mu_day = s_rad / np.sqrt(365.0)   # diffusion scale so that over a year SD ≈ s_rad
+
+# Use separate scales if μ1 and μ2 have different SEs (from Hessian):
+sigma_mu1_day = max(1e-6, safe_se(se_base[0], default=s_rad) / np.sqrt(365.0))
+sigma_mu2_day = max(1e-6, safe_se(se_base[1], default=s_rad) / np.sqrt(365.0))
 
 
     
