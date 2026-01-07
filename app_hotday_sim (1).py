@@ -153,7 +153,7 @@ else:
 
 # -------------------- Monte Carlo: simulate next 7 days temps & hot days --------------------
 doy0 = doy_today()
-future_doys = np.array([((doy0 + i - 1) % 365) + 1 for i in range(1, 8)])
+future_doys = np.array([((doy0 + i - 1) % 365) + 1 for i in range(1, 30)])
 ssgvm_probs_7 = hotprob_ssgvm[future_doys - 1]
 
 # Build climatology by DOY from historical tmax
