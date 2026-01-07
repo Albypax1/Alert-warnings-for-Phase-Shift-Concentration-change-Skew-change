@@ -307,55 +307,23 @@ try:
     #sigma_mu1_day = safe_se(se_base[0], default=0.08) * 0.5 " old values
     #sigma_mu2_day = safe_se(se_base[1], default=0.08) * 0.5
 
-################ Resampled volatioty##################################################
-
-
-# Phase angles of baseline hot days in radians, e.g., theta_i = 2π * doy_i / 365
-theta = np.asarray(theta_baseline_rad)
-# --- Patched volatility computation ---
+### Volatility estimation (robust, data-driven when available)
 try:
-    # Use phi_base if available, else fallback
-    if 'phi_base' in globals() and isinstance(phi_base, np.ndarray) and phi_base.size > 0:
-        theta = phi_base
-    else:
-        theta = np.array([])
-    if theta.size > 0:
-        C = np.mean(np.cos(theta)); S = np.mean(np.sin(theta)); R = np.sqrt(C**2 + S**2)
-        s_circ_rad = np.sqrt(2*(1 - R))
+    # Use baseline phase samples if available; else fall back to a climatological spread
+    if 'phi_base' in globals() and isinstance(phi_base, np.ndarray) and phi_base.size > 3:
+        theta_phase = phi_base
+        C = np.mean(np.cos(theta_phase)); S = np.mean(np.sin(theta_phase))
+        R = float(np.sqrt(C*C + S*S))
+        s_circ_rad = float(np.sqrt(max(0.0, 2*(1 - R))))
         s_circ_days = s_circ_rad * (365.0 / (2*np.pi))
     else:
-        s_circ_days = 20.0  # fallback ~3 weeks
-    # Bootstrap SE placeholders
-    se_mu1_boot = s_circ_days
-    se_mu2_boot = s_circ_days
-    w = 0.5
-    sigma_mu1_day = w*se_mu1_boot + (1-w)*s_circ_days
-    sigma_mu2_day = w*se_mu2_boot + (1-w)*s_circ_days
-except Exception as e:
+        s_circ_days = 20.0  # ~3 weeks default for Kimberley DJF timing
+    sigma_mu1_day = s_circ_days
+    sigma_mu2_day = s_circ_days
+except Exception:
     sigma_mu1_day = 20.0; sigma_mu2_day = 20.0
 
-# Mean resultant length R
-    C = np.mean(np.cos(theta))
-    S = np.mean(np.sin(theta))
-    R = np.sqrt(C**2 + S**2)
 
-# Circular SD in radians → days
-    s_circ_rad = np.sqrt(2*(1 - R))                                 # Fisher (1995); Circular Stats in R
-    s_circ_days = s_circ_rad * (365.0 / (2*np.pi))
-
-# Bootstrap SEs for OU diffusion on μ1, μ2 (from residuals)
-se_mu1_boot = ou_sigma_bootstrap(mu1_series)                     # returns σ_SE in days
-se_mu2_boot = ou_sigma_bootstrap(mu2_series)
-
-# Suggested σ for simulation: blend circular spread with bootstrap precision
-    w = 0.5  # weight towards bootstrap precision; adjust 0.3–0.7 based on sample length
-    sigma_mu1_day = w*se_mu1_boot + (1-w)*s_circ_days
-    sigma_mu2_day = w*se_mu2_boot + (1-w)*s_circ_days
-
-# If von Mises fitted to phase: use kappa to set σ as cross-check
-# var_theta_rad ≈ 1/kappa  (moderate κ); sigma_vm_days = sqrt(var_theta_rad) * 365/(2π)
-
-#########################################################################
     
 
     grid_days, paths_mu1 = simulate_angles(mu1_base, mu1_mon, trend_mu,  sigma_mu1_day, horizon_days, step_days, n_paths, seed=42)
@@ -368,8 +336,8 @@ se_mu2_boot = ou_sigma_bootstrap(mu2_series)
     # Probabilities across the grid
     prob_mu1 = (paths_mu1 > theta_mu1_days).mean(axis=0)
     prob_mu2 = (paths_mu2 > theta_mu2_days).mean(axis=0)
-    prob_k1  = ((paths_k1 > k1_upper) | (paths_k1 < k1_lower)).mean(axis=0)
-    prob_k2  = ((paths_k2 > k2_upper) | (paths_k2 < k2_lower)).mean(axis=0)
+    prob_k1 = ((paths_k1 > k1_upper) | (paths_k1 < k1_lower)).mean(axis=0)
+    prob_k2 = ((paths_k2 > k2_upper) | (paths_k2 < k2_lower)).mean(axis=0)
     prob_eta = (np.abs(paths_eta - eta_base) > theta_eta).mean(axis=0)
 
     # Monthly summary (approximate: month m ~ day 30.4*m)
