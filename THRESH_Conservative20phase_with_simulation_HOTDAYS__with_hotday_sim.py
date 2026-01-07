@@ -322,10 +322,13 @@ import pandas as _pd
 import numpy as _np
 
 # Build date grids for each simulated series
+# Resolve start date (timezone-aware if possible)
+_start_today = None
 try:
-    start_dt = _pd.Timestamp.today(tz=TIMEZONE).normalize()
+    _start_today = _pd.Timestamp.today(tz=TIMEZONE)
 except Exception:
-    start_dt = _pd.Timestamp.today().normalize()
+    _start_today = _pd.Timestamp.today()
+start_dt = _start_today.normalize()
 
 # Convert day offsets to actual dates
 _dates_mu = start_dt + _pd.to_timedelta(grid_days, unit='D')
