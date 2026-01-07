@@ -303,7 +303,6 @@ try:
 
 #### New volatility##############################
 # ####Phase angles of baseline hot days in radians, e.g., theta_i = 2π * doy_i / 365
-    theta = np.asarray(theta_baseline_rad)
 
 # Mean resultant length R
     C = np.mean(np.cos(theta))
