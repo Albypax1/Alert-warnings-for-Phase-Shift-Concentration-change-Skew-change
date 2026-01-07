@@ -264,7 +264,7 @@ try:
     if delta_nu_days > theta_nu_days:
         alerts.append(f"Skew orientation alert (nu): Delta = {delta_nu_days:.1f} days > theta_nu = {theta_nu_days:.1f}")
 
-    st.subheader("Alerts")
+    st.subheader("Alerts for parameter shifts")
     if alerts:
         for a in alerts:
             st.error(a)
