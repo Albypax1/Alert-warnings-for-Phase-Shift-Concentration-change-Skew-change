@@ -303,10 +303,8 @@ try:
 
 
 def volatility_from_se(se_value, se_period_days, step_days, min_sigma=1e-6):
-    """
     Convert a standard error measured over `se_period_days` into a per-step volatility
     for a simulation that advances in increments of `step_days`, using sqrt-time scaling.
-    """
     se_val = safe_se(se_value, default=0.08)
     sigma_step = se_val * np.sqrt(max(step_days, 1) / float(se_period_days))
     return max(sigma_step, min_sigma)
