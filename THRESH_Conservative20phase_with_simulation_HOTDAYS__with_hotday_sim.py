@@ -181,28 +181,22 @@ def simulate_eta_ou(eta_base, eta_init, se_eta_base, alpha=0.05, horizon_days=36
 # ---------------- UI ----------------
 ###Background#############################################################
 ##########################################################################
-/* Hot Climate Theme */
-body {
-    background: linear-gradient(135deg, #FF6F61, #FFB347, #FFD194);
-    background-size: 400% 400%;
-    animation: heatwave 15s ease infinite;
-    color: #2C2C2C; /* Dark text for contrast */
-    font-family: 'Segoe UI', sans-serif;
-}
 
-@keyframes heatwave {
-    0% { background-position: 0% 50%; }
-    50% { background-position: 100% 50%; }
-    100% { background-position: 0% 50%; }
-}
+from dash import Dash, html
 
-/* Optional: Dashboard container styling */
-.dashboard-container {
-    background-color: rgba(255, 255, 255, 0.85);
-    border-radius: 12px;
-    padding: 20px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-}
+app = Dash(__name__)  # Will auto-load assets/style.css
+
+app.layout = html.Div(
+    className="dashboard-container",
+    children=[
+        html.H2("SS‑GvM Monitoring + Simulation — Kimberley"),
+        # ... your graphs/tables ...
+    ]
+)
+
+if __name__ == "__main__":
+    app.run_server(debug=True)
+
 
 ####################Title and sidebars ##############################################
 st.title("Heat Risk Monitoring & Forecast Da using advance Statistical and Machine learning Methods")
