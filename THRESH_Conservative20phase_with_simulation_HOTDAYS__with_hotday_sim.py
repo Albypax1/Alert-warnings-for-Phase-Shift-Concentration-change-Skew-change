@@ -297,45 +297,24 @@ try:
     st.subheader("Multi-parameter simulation (next year)")
     st.markdown("Stochastic projections for mu1, mu2, k1, k2, eta using phase drift + OU dynamics.")
 
-    # Volatility fallbacks (sensitive defaults)
-    #sigma_mu1_day = safe_se(se_base[0], default=0.08) * 0.5 #old volatility
-    #sigma_mu2_day = safe_se(se_base[1], default=0.08) * 0.5
+
+grid_days, paths_mu1 = simulate_angles(mu1_base, mu1_mon, trend_mu, sigma_mu1_day,
+                                       horizon_days, step_days, n_paths, seed=42)
+_,          paths_mu2 = simulate_angles(mu2_base, mu2_mon, trend_mu2, sigma_mu2_day,
+                                       horizon_days, step_days, n_paths, seed=43)
+
+grid_days_k1, paths_k1 = simulate_k_log_ou(k1_base, k1_mon, se_base[2], alpha=alpha_k,
+                                           horizon_days=horizon_days, step_days=step_days,
+                                           n_paths=n_paths, seed=44)
+grid_days_k2, paths_k2 = simulate_k_log_ou(k2_base, k2_mon, se_base[3], alpha=alpha_k,
+                                           horizon_days=horizon_days, step_days=step_days,
+                                           n_paths=n_paths, seed=45)
+
+grid_days_eta, paths_eta = simulate_eta_ou(eta_base, eta_mon, se_base[4], alpha=alpha_eta,
+                                           horizon_days=horizon_days, step_days=step_days,
+                                           n_paths=n_paths, seed=46)
 
     
-   
-# --- Volatility (data-driven; no ad-hoc multipliers) ---
-# Use baseline hot-day phase circular dispersion for angle diffusion;
-# fall back to SEs from the Hessian when needed.
-
-# 1) Circular SD of baseline hot-day phases (radians), using existing helper
-if 'phi_base' in globals() and isinstance(phi_base, np.ndarray) and phi_base.size > 0:
-    R, s_rad = _circular_stats(np.asarray(phi_base))   # returns (R, circular_sd_in_radians)
-else:
-    R, s_rad = (np.nan, 0.08)  # conservative fallback if phases unavailable
-
-# Diffusion scale per day for angle; simulate_angles uses sqrt(dt) internally
-# This sets the annual random-walk SD ~ s_rad
-sigma_mu1_day = max(1e-6, (safe_se(se_base[0], default=s_rad) / np.sqrt(365.0)))
-sigma_mu2_day = max(1e-6, (safe_se(se_base[1], default=s_rad) / np.sqrt(365.0)))
-
-# 2) Intensity parameters k1, k2 (log-space OU): set volatility from relative SE
-sigma_k1_log = max(1e-6, safe_se(se_base[2]) / max(params_base[2], 1e-6))
-sigma_k2_log = max(1e-6, safe_se(se_base[3]) / max(params_base[3], 1e-6))
-
-# 3) Skew parameter eta (tanh-transform OU): set volatility from SE (no multiplier)
-sigma_eta_y = max(1e-6, safe_se(se_base[4], default=0.10))
-
-
-
-
-    
-    grid_days, paths_mu1 = simulate_angles(mu1_base, mu1_mon, trend_mu,  sigma_mu1_day, horizon_days, step_days, n_paths, seed=42)
-    _,         paths_mu2 = simulate_angles(mu2_base, mu2_mon, trend_mu2, sigma_mu2_day, horizon_days, step_days, n_paths, seed=43)
-
-    grid_days_k1, paths_k1 = simulate_k_log_ou(k1_base, k1_mon, se_base[2], alpha=alpha_k,   horizon_days=horizon_days, step_days=step_days, n_paths=n_paths, seed=44)
-    grid_days_k2, paths_k2 = simulate_k_log_ou(k2_base, k2_mon, se_base[3], alpha=alpha_k,   horizon_days=horizon_days, step_days=step_days, n_paths=n_paths, seed=45)
-    grid_days_eta, paths_eta = simulate_eta_ou(eta_base, eta_mon, se_base[4], alpha=alpha_eta, horizon_days=horizon_days, step_days=step_days, n_paths=n_paths, seed=46)
-
     # Probabilities across the grid
     prob_mu1 = (paths_mu1 > theta_mu1_days).mean(axis=0)
     prob_mu2 = (paths_mu2 > theta_mu2_days).mean(axis=0)
