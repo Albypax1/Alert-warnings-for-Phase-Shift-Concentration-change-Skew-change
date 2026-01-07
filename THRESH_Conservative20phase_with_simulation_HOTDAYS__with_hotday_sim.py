@@ -298,8 +298,10 @@ try:
     st.markdown("Stochastic projections for mu1, mu2, k1, k2, eta using phase drift + OU dynamics.")
 
  # Volatility fallbacks (sensitive defaults)
-    sigma_mu1_day = safe_se(se_base[0], default=0.08) * 0.5
-    sigma_mu2_day = safe_se(se_base[1], default=0.08) * 0.5
+    
+    sigma_mu1_day_boot = bootstrap_sigma(mu1_samples, n_boot=2000)  # adjust n_boot as desired
+    sigma_mu2_day_boot = bootstrap_sigma(mu2_samples, n_boot=2000)
+
 
     grid_days, paths_mu1 = simulate_angles(mu1_base, mu1_mon, trend_mu,  sigma_mu1_day, horizon_days, step_days, n_paths, seed=42)
     _,         paths_mu2 = simulate_angles(mu2_base, mu2_mon, trend_mu2, sigma_mu2_day, horizon_days, step_days, n_paths, seed=43)
