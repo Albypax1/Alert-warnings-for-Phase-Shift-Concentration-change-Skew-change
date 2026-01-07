@@ -297,51 +297,24 @@ try:
     st.subheader("Multi-parameter simulation (next year)")
     st.markdown("Stochastic projections for mu1, mu2, k1, k2, eta using phase drift + OU dynamics.")
 
+ # Volatility fallbacks (sensitive defaults)
+    sigma_mu1_day = safe_se(se_base[0], default=0.08) * 0.5
+    sigma_mu2_day = safe_se(se_base[1], default=0.08) * 0.5
 
+    grid_days, paths_mu1 = simulate_angles(mu1_base, mu1_mon, trend_mu,  sigma_mu1_day, horizon_days, step_days, n_paths, seed=42)
+    _,         paths_mu2 = simulate_angles(mu2_base, mu2_mon, trend_mu2, sigma_mu2_day, horizon_days, step_days, n_paths, seed=43)
 
-# --- helpers (top-level, no try above) ---
+    grid_days_k1, paths_k1 = simulate_k_log_ou(k1_base, k1_mon, se_base[2], alpha=alpha_k,   horizon_days=horizon_days, step_days=step_days, n_paths=n_paths, seed=44)
+    grid_days_k2, paths_k2 = simulate_k_log_ou(k2_base, k2_mon, se_base[3], alpha=alpha_k,   horizon_days=horizon_days, step_days=step_days, n_paths=n_paths, seed=45)
+    grid_days_eta, paths_eta = simulate_eta_ou(eta_base, eta_mon, se_base[4], alpha=alpha_eta, horizon_days=horizon_days, step_days=step_days, n_paths=n_paths, seed=46)
 
-
-def volatility_from_se(se_value, se_period_days, step_days, min_sigma=1e-6):
-    Convert a standard error measured over `se_period_days` into a per-step volatility
-    for a simulation that advances in increments of `step_days`, using sqrt-time scaling.
-    se_val = safe_se(se_value, default=0.08)
-    sigma_step = se_val * np.sqrt(max(step_days, 1) / float(se_period_days))
-    return max(sigma_step, min_sigma)
-
-# --- later: your main logic (can be under try/except if you want) ---
-try:
-    se_period_days = 30  # adjust as needed
-
-    sigma_mu1_day = volatility_from_se(se_base[0], se_period_days, step_days)
-    sigma_mu2_day = volatility_from_se(se_base[1], se_period_days, step_days)
-
-    grid_days, paths_mu1 = simulate_angles(mu1_base, mu1_mon, trend_mu,
-                                           sigma_mu1_day, horizon_days, step_days,
-                                           n_paths, seed=42)
-    _,         paths_mu2 = simulate_angles(mu2_base, mu2_mon, trend_mu2,
-                                           sigma_mu2_day, horizon_days, step_days,
-                                           n_paths, seed=43)
-
-    sigma_k1_step  = volatility_from_se(se_base[2], se_period_days, step_days)
-    sigma_k2_step  = volatility_from_se(se_base[3], se_period_days, step_days)
-    sigma_eta_step = volatility_from_se(se_base[4], se_period_days, step_days)
-
-    grid_days_k1,  paths_k1  = simulate_k_log_ou(k1_base,  k1_mon,  sigma_k1_step,
-                                                 alpha=alpha_k, horizon_days=horizon_days,
-                                                 step_days=step_days, n_paths=n_paths, seed=44)
-    grid_days_k2,  paths_k2  = simulate_k_log_ou(k2_base,  k2_mon,  sigma_k2_step,
-                                                 alpha=alpha_k, horizon_days=horizon_days,
-                                                 step_days=step_days, n_paths=n_paths, seed=45)
-    grid_days_eta, paths_eta = simulate_eta_ou(eta_base, eta_mon, sigma_eta_step,
-                                               alpha=alpha_eta, horizon_days=horizon_days,
-                                               step_days=step_days, n_paths=n_paths, seed=46)
-
+    # Probabilities across the grid
     prob_mu1 = (paths_mu1 > theta_mu1_days).mean(axis=0)
     prob_mu2 = (paths_mu2 > theta_mu2_days).mean(axis=0)
     prob_k1  = ((paths_k1 > k1_upper) | (paths_k1 < k1_lower)).mean(axis=0)
     prob_k2  = ((paths_k2 > k2_upper) | (paths_k2 < k2_lower)).mean(axis=0)
     prob_eta = (np.abs(paths_eta - eta_base) > theta_eta).mean(axis=0)
+
 
 except Exception as e:
     # Optional: log/print to help debugging
