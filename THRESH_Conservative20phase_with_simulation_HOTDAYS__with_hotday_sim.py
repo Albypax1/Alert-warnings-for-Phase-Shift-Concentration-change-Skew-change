@@ -298,9 +298,37 @@ try:
     st.markdown("Stochastic projections for mu1, mu2, k1, k2, eta using phase drift + OU dynamics.")
 
     # Volatility fallbacks (sensitive defaults)
-    sigma_mu1_day = safe_se(se_base[0], default=0.08) * 0.5
-    sigma_mu2_day = safe_se(se_base[1], default=0.08) * 0.5
+    #sigma_mu1_day = safe_se(se_base[0], default=0.08) * 0.5 #old volatility
+    #sigma_mu2_day = safe_se(se_base[1], default=0.08) * 0.5
 
+#### New volatility##############################
+# ####Phase angles of baseline hot days in radians, e.g., theta_i = 2π * doy_i / 365
+    theta = np.asarray(theta_baseline_rad)
+
+# Mean resultant length R
+    C = np.mean(np.cos(theta))
+    S = np.mean(np.sin(theta))
+    R = np.sqrt(C**2 + S**2)
+
+# Circular SD in radians → days
+    s_circ_rad = np.sqrt(2*(1 - R))                                 # Fisher (1995); Circular Stats in R
+    s_circ_days = s_circ_rad * (365.0 / (2*np.pi))
+
+# Bootstrap SEs for OU diffusion on μ1, μ2 (from residuals)
+    se_mu1_boot = ou_sigma_bootstrap(mu1_series)                     # returns σ_SE in days
+    se_mu2_boot = ou_sigma_bootstrap(mu2_series)
+
+# Suggested σ for simulation: blend circular spread with bootstrap precision
+    w = 0.5  # weight towards bootstrap precision; adjust 0.3–0.7 based on sample length
+    sigma_mu1_day = w*se_mu1_boot + (1-w)*s_circ_days
+    sigma_mu2_day = w*se_mu2_boot + (1-w)*s_circ_days
+
+# If von Mises fitted to phase: use kappa to set σ as cross-check
+# var_theta_rad ≈ 1/kappa  (moderate κ); sigma_vm_days = sqrt(var_theta_rad) * 365/(2π)
+
+
+
+    
     grid_days, paths_mu1 = simulate_angles(mu1_base, mu1_mon, trend_mu,  sigma_mu1_day, horizon_days, step_days, n_paths, seed=42)
     _,         paths_mu2 = simulate_angles(mu2_base, mu2_mon, trend_mu2, sigma_mu2_day, horizon_days, step_days, n_paths, seed=43)
 
