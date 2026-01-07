@@ -153,7 +153,7 @@ else:
 
 # -------------------- Monte Carlo: simulate next 7 days temps & hot days --------------------
 doy0 = doy_today()
-future_doys = np.array([((doy0 + i - 1) % 365) + 1 for i in range(1, 30)])
+future_doys = np.array([((doy0 + i - 1) % 365) + 1 for i in range(1, 31)])
 ssgvm_probs_7 = hotprob_ssgvm[future_doys - 1]
 
 # Build climatology by DOY from historical tmax
@@ -162,8 +162,8 @@ mu_clim = clim_by_doy['mean'].values
 sd_clim = np.clip(clim_by_doy['std'].values, 0.5, None)  # avoid zeros
 
 # Simulate n_sims paths: sample temps from Normal(mean_DOY, sd_DOY), compute ML proba (if model), blend with SS-GvM, sample hot indicators
-sim_probs_daily = np.zeros((n_sims, 7))
-sim_hot_daily   = np.zeros((n_sims, 7), dtype=bool)
+sim_probs_daily = np.zeros((n_sims, 30))
+sim_hot_daily   = np.zeros((n_sims, 30), dtype=bool)
 
 for s in range(n_sims):
     temps7 = np.random.normal(mu_clim[future_doys - 1], sd_clim[future_doys - 1])
