@@ -315,28 +315,93 @@ try:
     prob_k2  = ((paths_k2 > k2_upper) | (paths_k2 < k2_lower)).mean(axis=0)
     prob_eta = (np.abs(paths_eta - eta_base) > theta_eta).mean(axis=0)
 
-    # Monthly summary (approximate: month m ~ day 30.4*m)
-    month_days = (np.arange(1,13) * 30.4).astype(int)
-    summary_rows = []
-    for m_idx, d in enumerate(month_days, start=1):
-        i_mu = min(np.searchsorted(grid_days, d), len(grid_days)-1)
-        i_k1 = min(np.searchsorted(grid_days_k1, d), len(grid_days_k1)-1)
-        i_k2 = min(np.searchsorted(grid_days_k2, d), len(grid_days_k2)-1)
-        i_et = min(np.searchsorted(grid_days_eta, d), len(grid_days_eta)-1)
-        summary_rows.append({
-            "MonthAhead": m_idx,
-            f"P(Delta mu1 > {theta_mu1_days:.1f}d)": prob_mu1[i_mu],
-            f"P(Delta mu2 > {theta_mu2_days:.1f}d)": prob_mu2[i_mu],
-            "P(k1 outside CL)": prob_k1[i_k1],
-            "P(k2 outside CL)": prob_k2[i_k2],
-            f"P(|Delta eta| > {theta_eta:.2f})": prob_eta[i_et],
-        })
-    monthly_summary = pd.DataFrame(summary_rows)
+    # Monthly summary — realistic calendar-month aggregation
+# We compute the probability of *at least one* threshold exceedance within each calendar month
+# using path-wise events and actual month boundaries, which captures serial dependence.
+import pandas as _pd
+import numpy as _np
 
-    st.subheader("Monthly forward risk (probabilities)")
-    st.dataframe(monthly_summary)
+# Build date grids for each simulated series
+try:
+    start_dt = _pd.Timestamp.today(tz=TIMEZONE).normalize()
+except Exception:
+    start_dt = _pd.Timestamp.today().normalize()
 
-    # Probability curves
+# Convert day offsets to actual dates
+_dates_mu = start_dt + _pd.to_timedelta(grid_days, unit='D')
+_dates_k1 = start_dt + _pd.to_timedelta(grid_days_k1, unit='D')
+_dates_k2 = start_dt + _pd.to_timedelta(grid_days_k2, unit='D')
+_dates_eta = start_dt + _pd.to_timedelta(grid_days_eta, unit='D')
+
+# Event matrices (n_paths × n_steps) for each signal
+_evt_mu1 = (paths_mu1 > float(theta_mu1_days))
+_evt_mu2 = (paths_mu2 > float(theta_mu2_days))
+_evt_k1 = (paths_k1 > float(k1\_upper)) | (paths_k1 < float(k1\_lower))
+_evt_k2 = (paths_k2 > float(k2\_upper)) | (paths_k2 < float(k2\_lower))
+_evt_eta = (_np.abs(paths_eta - float(eta\_base)) > float(theta_eta))
+
+# Helper: forward month ranges over the horizon, starting next calendar month
+from pandas.tseries.offsets import MonthBegin, MonthEnd
+
+def _month_ranges_forward(start_dt, n_months, horizon_days):
+    ranges = []
+    first_start = start_dt + MonthBegin(1)  # first day of next month
+    last_dt = start_dt + _pd.Timedelta(days=int(horizon_days))
+    for m in range(n_months):
+        ms = first_start + MonthBegin(m)
+        me = ms + MonthEnd(1)
+        if ms > last_dt:
+            break
+        if me > last_dt:
+            me = last_dt
+        ranges.append((m+1, ms, me))
+    return ranges
+
+_ranges = _month_ranges_forward(start_dt, 12, horizon_days)
+
+# Compute monthly probability of at least one event (path-wise)
+
+def _monthly_prob_any(evt_paths, date_grid, ranges):
+    probs = []
+    for _, ms, me in ranges:
+        idx = (date_grid >= ms) & (date_grid <= me)
+        if not idx.any():
+            probs.append(_np.nan)
+        else:
+            any_per_path = evt_paths[:, idx].any(axis=1)
+            probs.append(float(any_per_path.mean()))
+    return probs
+
+p_mu1_m = _monthly_prob_any(_evt_mu1, _dates_mu, _ranges)
+p_mu2_m = _monthly_prob_any(_evt_mu2, _dates_mu, _ranges)
+p_k1_m  = _monthly_prob_any(_evt_k1, _dates_k1, _ranges)
+p_k2_m  = _monthly_prob_any(_evt_k2, _dates_k2, _ranges)
+p_eta_m = _monthly_prob_any(_evt_eta, _dates_eta, _ranges)
+
+summary_rows = []
+for (m_idx, ms, me), pmu1, pmu2, pk1, pk2, peta in zip(_ranges, p_mu1_m, p_mu2_m, p_k1_m, p_k2_m, p_eta_m):
+    summary_rows.append({
+        "MonthAhead": int(m_idx),
+        "CalendarMonth": f"{ms.strftime('%Y-%m')}",
+        f"P(Δmu1 > {float(theta_mu1_days):.1f}d; any-day)": pmu1,
+        f"P(Δmu2 > {float(theta_mu2_days):.1f}d; any-day)": pmu2,
+        "P(k1 outside CL; any-day)": pk1,
+        "P(k2 outside CL; any-day)": pk2,
+        f"P(|Δeta| > {float(theta_eta):.3f}; any-day)": peta,
+        "DaysCovered": int(max(0, (me - ms).days + 1))
+    })
+
+monthly_summary = _pd.DataFrame(summary_rows)
+st.subheader("Monthly forward risk (any-day exceedance, calendar months)")
+st.caption("Computed over actual month boundaries using path-wise events. This accounts for autocorrelation and avoids single-day proxies.")
+st.dataframe(monthly_summary)
+
+# CSV download for monthly probabilities (updated)
+csv_monthly = monthly_summary.to_csv(index=False).encode("utf-8")
+st.download_button("Download monthly probabilities (CSV)", data=csv_monthly,
+                  file_name="monthly_forward_risk_probabilities_calendar.csv", mime="text/csv")
+
+# Probability curves
     fig_prob, axpr = plt.subplots(figsize=(10,5))
     axpr.plot(grid_days,    prob_mu1, label=f"P(Delta mu1 > {theta_mu1_days:.1f}d)", color="navy")
     axpr.plot(grid_days,    prob_mu2, label=f"P(Delta mu2 > {theta_mu2_days:.1f}d)", color="purple")
