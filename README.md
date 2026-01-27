@@ -4,6 +4,7 @@
 
 Methodology behind the APP
 ##############################################################################################
+
 The app uses a circular distribution to model the annual timing of hot days and then compares the baseline and monitoring parameters via maximum‑likelihood estimation with Hessian‑based standard errors, and then projects future behaviour using drift‑based circular simulations for phase parameters and mean‑reverting Ornstein–Uhlenbeck (OU) processes for concentration and skew parameters through Monte‑Carlo forecasting, while additionally incorporating a machine‑learning model(Gradient Boosting or Random Forest) trained on recent daily temperature features and the circular distribution seasonal probabilities to enhance short‑horizon prediction of monthly hot‑day risk estimates
 ####################################################################################################
 
