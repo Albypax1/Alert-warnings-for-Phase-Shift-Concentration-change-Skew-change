@@ -98,4 +98,9 @@ Report to your supervisor when:
 (c) A new heatwave occurs
 (d) Heat timing or intensity changes sharply
 
+
+Hot Days Benchmarking — Add-on
+Click on the ⬇️ Fetch & Analyse Hot Days button to obtain Daily Tmax vs historical percentile threshold and Detected heatwaves within the monitoring period.
+
+
 Send all your questions to albert.aantwi@outlook.com
