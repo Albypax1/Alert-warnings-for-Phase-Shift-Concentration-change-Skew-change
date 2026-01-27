@@ -1,7 +1,7 @@
 
 # -*- coding: utf-8 -*-
-# SS-GvM Monitoring + Simulation — Kimberley (Updated: SE fallbacks, mu2 drift, sensitive thresholds)
-# Author: M365 Copilot | Date: 2026-01-03
+# SS-GvM Monitoring + Simulation — Arid and semi-arid regions (Updated: SE fallbacks, mu2 drift, sensitive thresholds)
+# Author: Albert Antwi | Date: 2026-01-03
 
 import streamlit as st
 import pandas as pd
@@ -12,8 +12,8 @@ from scipy import optimize
 import requests
 
 TWO_PI = 2*np.pi
-LAT, LON = 35.373, -119.019  # Bakersfield, US
-TIMEZONE = "Africa/Johannesburg"
+LAT, LON = 25.774, -80.194  # Miami, US 
+TIMEZONE = "USA/Miami"
 
 # ---------------- utils ----------------
 def wrap_angle(x):
@@ -484,7 +484,7 @@ def hotdays_heatwaves(binary_series: pd.Series, min_len: int = 3):
 
 # Sidebar controls
 st.sidebar.header("Hot-day location")
-place = st.sidebar.text_input("Place name (auto-suggest)", value="Kimberley")
+place = st.sidebar.text_input("Place name (auto-suggest)", value="Miami")
 autosuggest = st.sidebar.button("🔎 Auto-suggest")
 if 'hot_lat' not in st.session_state:
     st.session_state.hot_lat = LAT
@@ -512,7 +512,7 @@ min_run = st.sidebar.slider("Heatwave min length (days)", 2, 7, 3, 1)
 if st.sidebar.button("🌍 WMO preset (user pref)"):
     percentile = 90
     baseline_start = date(2015,1,1)
-    baseline_end   = date(2025,12,31)
+    baseline_end   = date(2023,12,31)
     min_run = 3
     st.sidebar.info("Applied: ≥90th percentile, baseline 2015–2025, heatwave length ≥3 days")
 
