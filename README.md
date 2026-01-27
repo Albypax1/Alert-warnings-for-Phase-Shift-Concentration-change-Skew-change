@@ -11,14 +11,14 @@ The app uses a circular distribution to model the annual timing of hot days and 
 🟩 1. What this tool does
 This tool helps you monitor unusual heat patterns and gives early warnings when hot days begin changing compared to normal. It also shows the risk of hot days in the coming months.
  
-
+####################################################################################################
 🟩 2. The three things you check
 ✔️ A. Alerts
 This section tells you if recent heat behaviour has shifted in terms of 
 (a) Hot days coming earlier or later
 (b) Heat becoming more intense or clustered and
 (c) The shape/timing of the hot‑day season changing
-
+####################################################################################################
 🟩 GREEN = Normal: Everything is behaving as expected.
 🟥 RED = Unusual Change: Pay attention. Something has shifted.
 
