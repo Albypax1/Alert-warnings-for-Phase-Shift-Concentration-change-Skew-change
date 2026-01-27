@@ -12,7 +12,7 @@ from scipy import optimize
 import requests
 
 TWO_PI = 2*np.pi
-LAT, LON = -28.7419, 24.7719  # Kimberley
+LAT, LON = 35.373, -119.019  # Bakersfield, US
 TIMEZONE = "Africa/Johannesburg"
 
 # ---------------- utils ----------------
@@ -179,7 +179,7 @@ def simulate_eta_ou(eta_base, eta_init, se_eta_base, alpha=0.05, horizon_days=36
     return grid_days, paths
 
 # ---------------- UI ----------------
-st.title("SS-GvM Monitoring + Simulation — Kimberley (Updated)")
+st.title("Dashboard Application for forecasting monthly risk probabilities of phase shift in extreme temperature in arid & semi-arid regions")
 
 st.sidebar.header("Configuration")
 baseline_start = st.sidebar.date_input("Baseline start", date(2019,1,1))
