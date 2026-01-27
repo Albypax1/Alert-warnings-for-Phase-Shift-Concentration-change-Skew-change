@@ -1,5 +1,8 @@
 “Hot‑Day Monitoring & Early‑Warning System”
 (Simple guide for everyday use – non‑technical)
+##Methodology behind the APP##############################################################################################
+The app uses a circular distribution to model the annual timing of hot days and then compares the baseline and monitoring parameters via maximum‑likelihood estimation with Hessian‑based standard errors, and then projects future behaviour using drift‑based circular simulations for phase parameters and mean‑reverting Ornstein–Uhlenbeck (OU) processes for concentration and skew parameters through Monte‑Carlo forecasting, while additionally incorporating a machine‑learning model(Gradient Boosting or Random Forest) trained on recent daily temperature features and the circular distribution seasonal probabilities to enhance short‑horizon prediction of monthly hot‑day risk estimates
+###########################################################################################################################
 
 🟩 1. What this tool does
 This tool helps you monitor unusual heat patterns and gives early warnings when hot days begin changing compared to normal. It also shows the risk of hot days in the coming months.
