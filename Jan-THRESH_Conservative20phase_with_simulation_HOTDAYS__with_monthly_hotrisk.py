@@ -13,7 +13,8 @@ import requests
 
 TWO_PI = 2*np.pi
 LAT, LON = 25.774, -80.194  # Miami, US 
-TIMEZONE = "USA/Miami"
+#TIMEZONE = "USA/Miami"
+timezone=auto
 
 # ---------------- utils ----------------
 def wrap_angle(x):
