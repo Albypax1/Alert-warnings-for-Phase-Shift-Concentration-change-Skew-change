@@ -182,7 +182,7 @@ def simulate_eta_ou(eta_base, eta_init, se_eta_base, alpha=0.05, horizon_days=36
 st.title("Dashboard Application for forecasting monthly risk probabilities of phase shift in extreme temperature in arid & semi-arid regions")
 
 st.sidebar.header("Configuration")
-baseline_start = st.sidebar.date_input("Baseline start", date(2019,1,1))
+baseline_start = st.sidebar.date_input("Baseline start", date(2009,1,1))
 baseline_end   = st.sidebar.date_input("Baseline end",   date(2023,12,31))
 monitor_start  = st.sidebar.date_input("Monitor start",  date(2024,1,1))
 monitor_end    = st.sidebar.date_input("Monitor end",    date.today())
