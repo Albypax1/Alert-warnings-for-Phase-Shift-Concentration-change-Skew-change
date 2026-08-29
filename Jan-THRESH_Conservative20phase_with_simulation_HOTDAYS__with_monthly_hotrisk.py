@@ -757,7 +757,7 @@ ssgvm_probs_m = hotprob_ssgvm_all_m[future_doys_m - 1]
 #if df_mon_daily_m is not None and not df_mon_daily_m.empty:
     #clim_m = df_mon_daily_m.groupby('doy')['tmax'].agg(['mean','std']).reindex(np.arange(1,366)).fillna(method='ffill').fillna(method='bfill')
    # mu_clim_m = clim_m['mean'].values
-    sd_clim_m = np.clip(clim_m['std'].values, 0.5, None)
+    #sd_clim_m = np.clip(clim_m['std'].values, 0.5, None)
 #else:
     #mu_clim_m = np.full(365, 30.0)
     #sd_clim_m = np.full(365, 2.0)
