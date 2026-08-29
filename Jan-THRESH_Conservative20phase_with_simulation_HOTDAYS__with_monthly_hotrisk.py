@@ -753,14 +753,21 @@ except Exception:
 future_doys_m = np.array([((doy0_m + i - 1) % 365) + 1 for i in range(1, month_days + 1)])
 ssgvm_probs_m = hotprob_ssgvm_all_m[future_doys_m - 1]
 
-#Climatology by DOY
- if df_mon_daily_m is not None and not df_mon_daily_m.empty:
-     clim_m = df_mon_daily_m.groupby('doy')['tmax'].agg(['mean','std']).reindex(np.arange(1,366)).fillna(method='ffill').fillna(method='bfill')
-     mu_clim_m = clim_m['mean'].values
-     sd_clim_m = np.clip(clim_m['std'].values, 0.5, None)
-  else:
-     mu_clim_m = np.full(365, 30.0)
-     sd_clim_m = np.full(365, 2.0)
+# Climatology by DOY
+if df_mon_daily_m is not None and not df_mon_daily_m.empty:
+    clim_m = (
+        df_mon_daily_m.groupby('doy')['tmax']
+        .agg(['mean', 'std'])
+        .reindex(np.arange(1, 366))
+        .fillna(method='ffill')
+        .fillna(method='bfill')
+    )
+    mu_clim_m = clim_m['mean'].values
+    sd_clim_m = np.clip(clim_m['std'].values, 0.5, None)
+else:
+    mu_clim_m = np.full(365, 30.0)
+    sd_clim_m = np.full(365, 2.0)
+
 
 
 # Monte Carlo daily paths (for month_days)
