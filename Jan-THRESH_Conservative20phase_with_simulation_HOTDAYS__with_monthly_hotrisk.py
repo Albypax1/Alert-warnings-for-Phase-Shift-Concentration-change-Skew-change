@@ -759,14 +759,15 @@ if df_mon_daily_m is not None and not df_mon_daily_m.empty:
         df_mon_daily_m.groupby('doy')['tmax']
         .agg(['mean', 'std'])
         .reindex(np.arange(1, 366))
-        .fillna(method='ffill')
-        .fillna(method='bfill')
+        .ffill()
+        .bfill()
     )
     mu_clim_m = clim_m['mean'].values
     sd_clim_m = np.clip(clim_m['std'].values, 0.5, None)
 else:
     mu_clim_m = np.full(365, 30.0)
     sd_clim_m = np.full(365, 2.0)
+
 
 
 
