@@ -753,38 +753,15 @@ except Exception:
 future_doys_m = np.array([((doy0_m + i - 1) % 365) + 1 for i in range(1, month_days + 1)])
 ssgvm_probs_m = hotprob_ssgvm_all_m[future_doys_m - 1]
 
-# Climatology by DOY
-#if df_mon_daily_m is not None and not df_mon_daily_m.empty:
-    #clim_m = df_mon_daily_m.groupby('doy')['tmax'].agg(['mean','std']).reindex(np.arange(1,366)).fillna(method='ffill').fillna(method='bfill')
-   # mu_clim_m = clim_m['mean'].values
-    #sd_clim_m = np.clip(clim_m['std'].values, 0.5, None)
-#else:
-    #mu_clim_m = np.full(365, 30.0)
-    #sd_clim_m = np.full(365, 2.0)
-##########################################
-# --- Climate monitoring block (rewritten for safety) ---
-if df_mon_daily_m is not None and not df_mon_daily_m.empty:
-    # Ensure 'doy' column exists
-    if 'doy' not in df_mon_daily_m.columns and 'date' in df_mon_daily_m.columns:
-        df_mon_daily_m['doy'] = pd.to_datetime(df_mon_daily_m['date']).dt.dayofyear
+  Climatology by DOY
+ if df_mon_daily_m is not None and not df_mon_daily_m.empty:
+     clim_m = df_mon_daily_m.groupby('doy')['tmax'].agg(['mean','std']).reindex(np.arange(1,366)).fillna(method='ffill').fillna(method='bfill')
+     mu_clim_m = clim_m['mean'].values
+     sd_clim_m = np.clip(clim_m['std'].values, 0.5, None)
+ else:
+     mu_clim_m = np.full(365, 30.0)
+     sd_clim_m = np.full(365, 2.0)
 
-    if 'doy' in df_mon_daily_m.columns:
-        try:
-            clim_m = (
-                df_mon_daily_m.groupby('doy')['tmax']
-                .agg(['mean', 'std'])
-                .reindex(np.arange(1, 366))
-                .fillna(method='ffill')
-                .fillna(method='bfill')
-            )
-            st.subheader("Monitoring Climate Summary")
-            st.dataframe(clim_m)
-        except Exception as e:
-            st.warning(f"Could not compute monitoring climate summary: {e}")
-    else:
-        st.info("No 'doy' column available in monitoring data.")
-else:
-    st.info("Monitoring daily data is missing or empty. Climate summary not computed.")
 
 # Monte Carlo daily paths (for month_days)
 sim_probs_m = np.zeros((month_nsims, month_days))
