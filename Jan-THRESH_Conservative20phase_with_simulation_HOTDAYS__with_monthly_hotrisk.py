@@ -180,9 +180,10 @@ def simulate_eta_ou(eta_base, eta_init, se_eta_base, alpha=0.05, horizon_days=36
     return grid_days, paths
 
 # ---------------- UI ----------------
-st.title("Dashboard Application for forecasting risk probabilities of phase shift for heatwaves".)
-st.sidebar.markdown("**Author:** Dr. Albert Antwi, PhD (Statistics)")
-st.sidebar.markdown("Professional Statistician®, ASA (2024–2029)")
+st.title("Dashboard Application for forecasting risk probabilities of phase shift for heatwaves"
+         "**Author:** Dr. Albert Antwi, PhD (Statistics)",
+        "Professional Statistician®, ASA (2024–2029))
+
 
 st.sidebar.header("Configuration")
 baseline_start = st.sidebar.date_input("Baseline start", date(2009,1,1))
