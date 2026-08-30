@@ -180,9 +180,7 @@ def simulate_eta_ou(eta_base, eta_init, se_eta_base, alpha=0.05, horizon_days=36
     return grid_days, paths
 
 # ---------------- UI ----------------
-st.title("Dashboard Application for forecasting risk probabilities of phase shift for heatwaves"
-         "**Author:** Dr. Albert Antwi, PhD (Statistics)",
-        "Professional Statistician®, ASA (2024–2029))
+st.title("Dashboard Application for forecasting risk probabilities of phase shift for heatwaves","**Author:** Dr. Albert Antwi, PhD (Statistics)","Professional Statistician®, ASA (2024–2029))
 
 
 st.sidebar.header("Configuration")
